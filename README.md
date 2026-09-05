@@ -52,6 +52,15 @@ speed_walking·max_time_walking·max_public_transport_rides)는 위 TravelTimeMa
 등고선(MULTILINESTRING)이라 `shapely.ops.polygonize`로 닫힌 폴리곤으로 변환한 뒤, 청크 간에는 폴리곤
 union으로 합쳤다(min(A∪B) 도달영역 = min(A) 도달영역 ∪ min(B) 도달영역이 성립하므로 청크 분할이 안전).
 
+`isochrones_20260901_0900.ipynb`의 시각화 단계에서는 흩어진 조각(200~300여 개)을 `shapely.concave_hull`로
+결합한다. 조각 전체를 한 번에 hull에 넣으면 서로 멀리 떨어진 조각까지 이어 붙여 대상 지역 대부분을
+뒤덮거나(ratio가 높을 때), 반대로 hull이 원본 조각 일부를 누락하는 문제(ratio가 낮을 때 및
+`allow_holes=True`)가 있어서, **1.5km 버퍼로 가까운 조각끼리만 먼저 군집화한 뒤 군집별로
+concave_hull(ratio=0.1)을 적용**하고, 각 군집의 hull을 원본 조각들과 다시 union해 원본이 빠짐없이
+포함되도록 보장한다(`hull.contains(원본)`으로 직접 검증). 지도에는 이 hull과 함께, `TravelTimeMatrix`로
+계산해둔 격자별 정확한 통행시간을 이용한 **30분/60분 내 도달 불가능한 격자**도 함께 표시해, hull이
+과대추정할 수 있는 부분을 실측값으로 보완한다.
+
 ## 전체 프로젝트 데이터 요약
 
 이 저장소는 [DaeguGyeongbuk_accessibility](https://github.com/chaelynlee1201/DaeguGyeongbuk_accessibility)(GTFS 구축·검증)의 후속 저장소다. 두 저장소에서 사용한 데이터를 모두 정리하면 다음과 같다.
