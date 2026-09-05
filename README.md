@@ -14,6 +14,7 @@
 | `data/grid_100m_daegugyeongbuk_with_buildings` | `grid_100m_daegugyeongbuk` 중 건물 폴리곤과 교차하는 격자만 추출 (144,528개, 21.4%) — 실거주·이용 가능성이 없는 산지·농지 등 격자를 제외해 접근성 계산 대상을 실질화 | 자체 전처리 결과 ([`filter_grid_by_buildings.ipynb`](filter_grid_by_buildings.ipynb)), 원본은 [브이월드 — GIS건물일반공간정보](https://www.vworld.kr/dtmk/dtmk_ntads_s002.do?svcCde=NA&dsId=5) |
 | `data/raw_gtfs_network` | 대구경북 GTFS(2026-09-01 서비스일) + OSM 네트워크(daegyeong.osm.pbf) | GTFS_realtime_Korea 프로젝트(자체 구축) · OpenStreetMap |
 | `data/accessibility_ttm_20260901_0900` | r5py `TravelTimeMatrix`로 계산한, 건물 존재 100m 격자 중심점→가장 가까운 의료시설까지의 대중교통 통행시간 (2026-09-01 09:00 오전 첨두, 144,528개 격자) | 자체 계산 결과 ([`compute_ttm_nearest_facility.py`](compute_ttm_nearest_facility.py), [`accessibility_ttm_20260901_0900.ipynb`](accessibility_ttm_20260901_0900.ipynb)) |
+| `data/isochrones_20260901_0900` | r5py `Isochrones`로 계산한, 의료시설까지 30분/60분 이내 도달 가능 영역(isochrone 폴리곤) (2026-09-01 09:00 오전 첨두) | 자체 계산 결과 ([`compute_isochrones.py`](compute_isochrones.py), [`isochrones_20260901_0900.ipynb`](isochrones_20260901_0900.ipynb)) |
 
 `data/raw_vworld_buildings`(브이월드 건물 원본, 대구·경북 용량이 커서 `.gitignore` 처리)는 저장소에 포함되지 않는다. 재현하려면 위 브이월드 링크에서 로그인 후 대구광역시(`AL_D010_27_*`)·경상북도(`AL_D010_47_*`) GIS건물일반공간정보 SHP를 받아 `data/raw_vworld_buildings/`에 두고 `filter_grid_by_buildings.ipynb`를 실행하면 된다.
 
@@ -36,6 +37,20 @@
 144,528×3,887쌍 전체를 한 번에 들고 있으면 5억 6천만 행이 되어 메모리를 감당할 수 없으므로, origin을 3,000개씩 청크로 나눠 처리하며 청크마다 origin별 최솟값(가장 가까운 의료시설까지의 시간)만 남기고 버린다. 결과는 4단계(0~15/15~30/30~45/45~60분) + 60분 초과·도달불가(회색)로 시각화한다.
 
 **참고**: 이 방식(가장 가까운 시설까지의 시간)은 4단계 단계구분도용이며, 추후 log-logistic 거리조락 Gravity model(30/60분 접근성)을 계산하려면 "가장 가까운 시설"이 아니라 "도달 가능한 모든 시설까지의 시간"이 필요해 저장 전략을 다시 설계해야 한다.
+
+### 의료시설 접근성 Isochrone (r5py Isochrones)
+
+`compute_isochrones.py`가 [r5py](https://r5py.readthedocs.io/)의 `Isochrones`로 30분·60분 isochrone을 계산한다.
+`Isochrones`는 origin을 여러 개 넣으면 **"이들 중 어느 것으로부터든 최소 이동시간" 기준의 통합 isochrone**을
+반환하므로, 의료시설(20km 버퍼 내 3,887개)을 origin으로 넣으면 "가장 가까운 의료시설까지 30분/60분 내 도달
+가능한 영역"을 그대로 얻을 수 있다. 나머지 파라미터(출발일시·departure_time_window·transport_modes·
+speed_walking·max_time_walking·max_public_transport_rides)는 위 TravelTimeMatrix 계산과 동일하다
+(`max_time`은 `isochrones` 임계값에서 자동으로 유도되므로 별도로 넘기지 않는다).
+
+`Isochrones`는 목적지 수와 무관하게 origin 수가 비용을 지배해 origin당 약 0.6~1초로 `TravelTimeMatrix`보다
+훨씬 무겁다. 그래서 origin(의료시설 3,887개)을 500개씩 청크로 나눠 처리했다. 반환되는 geometry는
+등고선(MULTILINESTRING)이라 `shapely.ops.polygonize`로 닫힌 폴리곤으로 변환한 뒤, 청크 간에는 폴리곤
+union으로 합쳤다(min(A∪B) 도달영역 = min(A) 도달영역 ∪ min(B) 도달영역이 성립하므로 청크 분할이 안전).
 
 ## 전체 프로젝트 데이터 요약
 
@@ -64,6 +79,7 @@
 | grid_100m_daegugyeongbuk_with_buildings | 100m 격자 중 건물과 교차하는 격자만 추출 (144,528개, 21.4%) | 자체 전처리 |
 | raw_gtfs_network | 대구경북 GTFS(2026-09-01) + OSM 네트워크 | GTFS_realtime_Korea 프로젝트 · OpenStreetMap |
 | accessibility_ttm_20260901_0900 | r5py TravelTimeMatrix로 계산한 격자→최근접 의료시설 통행시간(2026-09-01 09:00) | 자체 계산 결과 |
+| isochrones_20260901_0900 | r5py Isochrones로 계산한 의료시설 30분/60분 도달 가능 영역(2026-09-01 09:00) | 자체 계산 결과 |
 
 ### 출처 기관 요약
 
