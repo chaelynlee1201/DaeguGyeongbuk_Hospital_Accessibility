@@ -1,2 +1,9 @@
 data/raw_vworld_buildings/
 .DS_Store
+
+# 대용량 출력물/중간산출물 (서버에서 재생성, git에 넣지 않음)
+data/g2sfca_20260814_0900/
+data/g2sfca_20260901_0900/
+data/raw_grid_1km/
+# GTFS 원본 zip은 NAS에서 직접 읽음
+data/raw_gtfs_network/*.zip
