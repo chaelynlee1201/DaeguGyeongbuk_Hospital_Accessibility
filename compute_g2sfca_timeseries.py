@@ -25,7 +25,9 @@
 """
 import os
 import gc
+import io
 import glob
+import zipfile
 import datetime
 import time
 
@@ -47,6 +49,7 @@ SIGUNGU_SHP = "data/BND_SIGUNGU_PG/BND_SIGUNGU_PG.shp"
 
 OUT_DIR = "data/g2sfca_timeseries"
 PERDATE_DIR = f"{OUT_DIR}/perdate"
+GTFS_CLEAN_DIR = f"{OUT_DIR}/gtfs_clean"  # 참조 무결성 정제한 GTFS 복사본 캐시
 
 TRVL_TIME = 60          # Gaussian 임계 통행시간 d0 (분)
 DEPART_HOUR = 9         # 매일 출발 시각(09:00 오전 첨두)
@@ -89,6 +92,110 @@ def find_gtfs(date):
     """NAS에서 해당 날짜 문자열을 포함하는 GTFS zip을 탐색(중첩 폴더 허용)."""
     hits = sorted(glob.glob(f"{GTFS_DIR}/**/*{date}*.zip", recursive=True))
     return hits[0] if hits else None
+
+
+def _read_zip_csv(zf, name):
+    if name not in zf.namelist():
+        return None
+    with zf.open(name) as fh:
+        return pd.read_csv(fh, dtype=str, keep_default_na=False)
+
+
+def clean_gtfs(src_zip, date):
+    """GTFS의 깨진 참조(dangling reference)를 제거한 복사본을 만들어 경로를 반환.
+    R5는 참조 무결성을 엄격히 검사하므로, 존재하지 않는 route/service/stop/trip을
+    가리키는 레코드를 연쇄적으로 솎아낸다. 결과는 GTFS_CLEAN_DIR에 캐시한다.
+    (NAS 원본은 수정하지 않음.)"""
+    os.makedirs(GTFS_CLEAN_DIR, exist_ok=True)
+    out_zip = f"{GTFS_CLEAN_DIR}/daegyung_gtfs_{date}.zip"
+    if os.path.exists(out_zip):
+        return out_zip
+
+    with zipfile.ZipFile(src_zip) as zf:
+        tables = {n: _read_zip_csv(zf, n) for n in zf.namelist() if n.endswith(".txt")}
+
+    routes = tables.get("routes.txt")
+    trips = tables.get("trips.txt")
+    stop_times = tables.get("stop_times.txt")
+    stops = tables.get("stops.txt")
+    calendar = tables.get("calendar.txt")
+    caldates = tables.get("calendar_dates.txt")
+    agency = tables.get("agency.txt")
+
+    service_ids = set()
+    if calendar is not None and "service_id" in calendar:
+        service_ids |= set(calendar["service_id"])
+    if caldates is not None and "service_id" in caldates:
+        service_ids |= set(caldates["service_id"])
+    stop_ids = set(stops["stop_id"]) if stops is not None else set()
+
+    removed = {}
+
+    # routes → agency
+    if routes is not None and agency is not None and "agency_id" in routes.columns and "agency_id" in agency.columns:
+        aset = set(agency["agency_id"])
+        before = len(routes)
+        routes = routes[routes["agency_id"].isin(aset)]
+        removed["routes"] = before - len(routes)
+        tables["routes.txt"] = routes
+    route_ids = set(routes["route_id"]) if routes is not None else set()
+
+    # trips → routes, service
+    if trips is not None:
+        before = len(trips)
+        if route_ids:
+            trips = trips[trips["route_id"].isin(route_ids)]
+        if service_ids:
+            trips = trips[trips["service_id"].isin(service_ids)]
+        removed["trips"] = before - len(trips)
+        tables["trips.txt"] = trips
+    trip_ids = set(trips["trip_id"]) if trips is not None else set()
+
+    # stop_times → trips, stops
+    if stop_times is not None:
+        before = len(stop_times)
+        stop_times = stop_times[stop_times["trip_id"].isin(trip_ids)]
+        if stop_ids:
+            stop_times = stop_times[stop_times["stop_id"].isin(stop_ids)]
+        removed["stop_times"] = before - len(stop_times)
+        tables["stop_times.txt"] = stop_times
+
+        # 정류장 2개 미만 trip 제거(운행 불가) 후 stop_times 재정합
+        cnt = stop_times.groupby("trip_id").size()
+        valid = set(cnt[cnt >= 2].index)
+        if trips is not None:
+            before = len(trips)
+            trips = trips[trips["trip_id"].isin(valid)]
+            removed["trips_lt2stops"] = before - len(trips)
+            tables["trips.txt"] = trips
+            trip_ids = set(trips["trip_id"])
+            stop_times = stop_times[stop_times["trip_id"].isin(trip_ids)]
+            tables["stop_times.txt"] = stop_times
+
+    # frequencies → trips
+    freq = tables.get("frequencies.txt")
+    if freq is not None and "trip_id" in freq.columns:
+        tables["frequencies.txt"] = freq[freq["trip_id"].isin(trip_ids)]
+
+    # transfers → stops
+    tr = tables.get("transfers.txt")
+    if tr is not None and stop_ids:
+        for c in ("from_stop_id", "to_stop_id"):
+            if c in tr.columns:
+                tr = tr[tr[c].isin(stop_ids)]
+        tables["transfers.txt"] = tr
+
+    with zipfile.ZipFile(out_zip, "w", zipfile.ZIP_DEFLATED) as zo:
+        for name, df in tables.items():
+            if df is None:
+                continue
+            buf = io.StringIO()
+            df.to_csv(buf, index=False)
+            zo.writestr(name, buf.getvalue())
+
+    removed = {k: v for k, v in removed.items() if v}
+    log(f"  GTFS 정제: 제거 {removed if removed else '없음'} → {os.path.basename(out_zip)}")
+    return out_zip
 
 
 def compute_ttm(net, origins, destinations, departure):
@@ -219,7 +326,8 @@ def main():
 
         t_day = time.time()
         log(f"[{k}/{len(todo)}] {date} 네트워크 구축 ({os.path.basename(gtfs)})")
-        net = r5py.TransportNetwork(OSM_PBF, [gtfs])
+        gtfs_clean = clean_gtfs(gtfs, date)  # 깨진 참조 정제한 복사본 사용
+        net = r5py.TransportNetwork(OSM_PBF, [gtfs_clean])
         process_date(date, net, fac_pts, grid_pts, supply, demand)
 
         del net
