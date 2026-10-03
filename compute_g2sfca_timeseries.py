@@ -107,7 +107,9 @@ def clean_gtfs(src_zip, date):
     가리키는 레코드를 연쇄적으로 솎아낸다. 결과는 GTFS_CLEAN_DIR에 캐시한다.
     (NAS 원본은 수정하지 않음.)"""
     os.makedirs(GTFS_CLEAN_DIR, exist_ok=True)
-    out_zip = f"{GTFS_CLEAN_DIR}/daegyung_gtfs_{date}.zip"
+    # r5py는 입력 파일을 basename 기준으로 캐시(심볼릭 링크)하므로, 원본과 반드시
+    # 다른 파일명을 써야 원본 캐시와 충돌하지 않는다 → '_clean' 접미사 필수.
+    out_zip = f"{GTFS_CLEAN_DIR}/daegyung_gtfs_{date}_clean.zip"
     if os.path.exists(out_zip):
         return out_zip
 
