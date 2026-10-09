@@ -22,10 +22,13 @@ import matplotlib
 matplotlib.use("Agg")  # 서버(헤드리스)에서 저장 전용
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
+from matplotlib.patches import Patch
 
 OUT_DIR = "data/g2sfca_timeseries"
 PERDATE_DIR = f"{OUT_DIR}/perdate"
 SIGUNGU_SHP = "data/BND_SIGUNGU_PG/BND_SIGUNGU_PG.shp"
+GRID_SHP = "data/grid_1km_population_daegugyeongbuk/grid_1km_population_daegugyeongbuk.shp"
+EXCLUDED_COLOR = "#d9d9d9"  # 인구 0(분석 제외) 격자 표시색(회색)
 TARGET_CODES = [
     "22010", "22020", "22030", "22040", "22050", "22060", "22070", "22510", "22520",
     "37050", "37030", "37070", "37100", "37560", "37570", "37580", "37590",
@@ -102,6 +105,11 @@ def main():
     sigungu = gpd.read_file(SIGUNGU_SHP, encoding="cp949")
     target = sigungu[sigungu["SIGUNGU_CD"].isin(TARGET_CODES)].to_crs(grid.crs)
 
+    # 인구 0(분석 제외) 격자: 전체 1km 격자에서 TOT_POP>0 이 아닌 것(0·결측 포함)
+    full_grid = gpd.read_file(GRID_SHP).to_crs(grid.crs)
+    excluded = full_grid[~(full_grid["TOT_POP"] > 0)]
+    print(f"인구 0(분석 제외) 격자: {len(excluded)}개 (회색 표시)")
+
     # 이상치에 색이 몰리지 않도록 세 레이어 전체의 98 분위를 공통 vmax로
     allvals = grid[[f"p{p:02d}" for p in PCTLS]].to_numpy(dtype=float)
     vmax = np.nanpercentile(allvals[allvals > 0], 98) if (allvals > 0).any() else 1.0
@@ -110,6 +118,9 @@ def main():
 
     fig, axes = plt.subplots(1, 3, figsize=(30, 11), facecolor="white")
     for ax, p in zip(axes, PCTLS):
+        # 제외 격자를 맨 아래 회색으로 먼저 깔아 "분석 대상 아님"을 명시
+        if len(excluded):
+            excluded.plot(ax=ax, color=EXCLUDED_COLOR, edgecolor="none", zorder=0)
         grid.plot(ax=ax, column=f"p{p:02d}", cmap="YlGnBu", vmin=vmin, vmax=vmax,
                   legend=True, edgecolor="none", zorder=1,
                   legend_kwds={"shrink": 0.5, "label": "G2SFCA 접근성 지수"})
@@ -119,6 +130,9 @@ def main():
             ax.annotate(row["SIGUNGU_NM"], xy=(c.x, c.y), ha="center", va="center",
                         fontsize=8, fontweight="bold", color="#1a1a1a", zorder=3,
                         path_effects=[pe.withStroke(linewidth=2.2, foreground="white")])
+        ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
+                                 label="인구 0 (분석 제외)")],
+                  loc="lower left", fontsize=10, frameon=True)
         ax.set_title(f"{labels[p]} (p{p:02d})", fontsize=15, fontweight="bold")
         ax.set_axis_off()
 
