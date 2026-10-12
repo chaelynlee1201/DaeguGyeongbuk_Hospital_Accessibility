@@ -3,14 +3,16 @@
 
 목적: 하루치가 아니라 평일 42일 분포를 만들어, 격자별 접근성 점수의
 5/50/95 분위 지도를 산출하기 위한 "날짜별 원자료"를 생성한다.
+두 출발 시간대(09:00, 12:00)를 각각 독립적으로 계산한다.
 (분위 집계·시각화는 aggregate_g2sfca_timeseries.py에서 별도로 수행.)
 
 방법론(기존 g2sfca 노트북과 동일, 추가 스케일 상수 없음):
   Gaussian 거리조락  g(t) = (exp(-0.5(t/d0)^2) - exp(-0.5)) / (1 - exp(-0.5)),  t>d0 이면 0
   Step1(시설별)   R_j = N_DOCTOR_j / Σ_i ( TOT_POP_i * g(t_시설→격자) )
   Step2(격자별)   A_i = Σ_j ( R_j * g(t_격자→시설) )
-  d0 = 60분, 출발 매일 09:00, departure_time_window = 3시간
+  d0 = 60분, 출발 09:00·12:00, departure_time_window = 2시간, 총 도보시간 상한 30분
   * 방향별 통행시간 분리: Step1은 시설→격자(f2g), Step2는 격자→시설(g2f)
+  * 산출물은 시간대별 하위폴더(perdate/0900, perdate/1200)에 저장
 
 데이터:
   GTFS   : NAS /mnt/cowork/Daegyung_GTFS_Scrapping/gtfs 에서 날짜별 zip 자동 탐색
@@ -48,18 +50,24 @@ GRID_SHP = "data/grid_1km_population_daegugyeongbuk/grid_1km_population_daegugye
 SIGUNGU_SHP = "data/BND_SIGUNGU_PG/BND_SIGUNGU_PG.shp"
 
 OUT_DIR = "data/g2sfca_timeseries"
-PERDATE_DIR = f"{OUT_DIR}/perdate"
+PERDATE_DIR = f"{OUT_DIR}/perdate"              # 아래에 시간대별 하위폴더(0900/1200)
 GTFS_CLEAN_DIR = f"{OUT_DIR}/gtfs_clean"  # 참조 무결성 정제한 GTFS 복사본 캐시
 
+# 두 출발 시간대(오전 첨두 09:00, 정오 12:00)를 각각 독립 계산한다.
+PERIODS = {"0900": 9, "1200": 12}       # 폴더명 → 출발 시각(시)
+
 TRVL_TIME = 60          # Gaussian 임계 통행시간 d0 (분)
-DEPART_HOUR = 9         # 매일 출발 시각(09:00 오전 첨두)
-DEPART_WINDOW_H = 3     # departure_time_window (시간)
+DEPART_WINDOW_H = 2     # departure_time_window (시간)
 MAX_TIME_MIN = 60       # 60분 초과(도달불가) 쌍은 반환되지 않음 → sparse
 WALK_SPEED = 4.5
-MAX_WALK_MIN = 15
+MAX_WALK_MIN = 30       # 여정 내 총 도보시간 상한(접근+환승+이격 합산)
 MAX_RIDES = 5
 CHUNK_SIZE = 1500       # origin 청크 크기(메모리 제한)
 BUFFER_KM = 20
+
+
+def perdate_dir(period):
+    return f"{PERDATE_DIR}/{period}"
 
 # 대상 지역 17개 행정경계(대구·경북 10개 시·군·구) 코드
 TARGET_CODES = [
@@ -275,9 +283,11 @@ def to_points_4326(gdf, id_col):
     return out
 
 
-def process_date(date, net, fac_pts, grid_pts, supply, demand):
-    """하루치 Step1(시설)·Step2(격자) 계산 후 체크포인트 CSV 저장."""
-    departure = datetime.datetime(int(date[:4]), int(date[4:6]), int(date[6:8]), DEPART_HOUR, 0, 0)
+def process_date(date, period, hour, net, fac_pts, grid_pts, supply, demand):
+    """특정 날짜·시간대의 Step1(시설)·Step2(격자) 계산 후 체크포인트 CSV 저장."""
+    departure = datetime.datetime(int(date[:4]), int(date[4:6]), int(date[6:8]), hour, 0, 0)
+    outdir = perdate_dir(period)
+    os.makedirs(outdir, exist_ok=True)
 
     # Step1: 시설→격자 (공급 대비 수요)
     f2g = compute_ttm(net, fac_pts, grid_pts, departure)          # FROM=FAC, TO=GRID
@@ -296,13 +306,19 @@ def process_date(date, net, fac_pts, grid_pts, supply, demand):
 
     # 저장(모든 시설/격자를 포함, 도달 없음=0)
     step1.rename("step1").reset_index().rename(columns={"index": "FAC_ID", "id": "FAC_ID"}).to_csv(
-        f"{PERDATE_DIR}/step1_{date}.csv", index=False)
+        f"{outdir}/step1_{date}.csv", index=False)
     step2.rename("G2SFCA").reset_index().rename(columns={"FROM_ID": "GRID_CD"}).to_csv(
-        f"{PERDATE_DIR}/step2_{date}.csv", index=False)
+        f"{outdir}/step2_{date}.csv", index=False)
 
     n_zero = int((step2 == 0).sum())
-    log(f"  {date}: Step1 max={step1.max():.3f}, Step2 max={step2.max():.3f}, "
+    log(f"    [{period}] {date}: Step1 max={step1.max():.4f}, Step2 max={step2.max():.4f}, "
         f"접근성0 격자 {n_zero}/{len(step2)}")
+
+
+def period_done(period, date):
+    d = perdate_dir(period)
+    return (os.path.exists(f"{d}/step1_{date}.csv")
+            and os.path.exists(f"{d}/step2_{date}.csv"))
 
 
 def main():
@@ -315,10 +331,9 @@ def main():
     grid_pts = to_points_4326(demand, "GRID_CD")
     log(f"origin/destination 준비 완료: 시설 {len(fac_pts)}, 격자 {len(grid_pts)}")
 
-    todo = [d for d in DATES
-            if not (os.path.exists(f"{PERDATE_DIR}/step1_{d}.csv")
-                    and os.path.exists(f"{PERDATE_DIR}/step2_{d}.csv"))]
-    log(f"대상 {len(DATES)}일 중 미완료 {len(todo)}일 처리 시작")
+    # 날짜별로, 두 시간대 중 하나라도 미완료면 그 날짜를 처리(네트워크는 1회만 빌드)
+    todo = [d for d in DATES if not all(period_done(p, d) for p in PERIODS)]
+    log(f"대상 {len(DATES)}일 × 시간대 {list(PERIODS)} 중, 미완료 날짜 {len(todo)}일 처리 시작")
 
     for k, date in enumerate(todo, 1):
         gtfs = find_gtfs(date)
@@ -327,10 +342,13 @@ def main():
             continue
 
         t_day = time.time()
-        log(f"[{k}/{len(todo)}] {date} 네트워크 구축 ({os.path.basename(gtfs)})")
+        pending = [p for p in PERIODS if not period_done(p, date)]
+        log(f"[{k}/{len(todo)}] {date} 네트워크 구축 ({os.path.basename(gtfs)}) | 처리 시간대 {pending}")
         gtfs_clean = clean_gtfs(gtfs, date)  # 깨진 참조 정제한 복사본 사용
         net = r5py.TransportNetwork(OSM_PBF, [gtfs_clean])
-        process_date(date, net, fac_pts, grid_pts, supply, demand)
+
+        for period in pending:                       # 같은 네트워크로 두 시간대 계산
+            process_date(date, period, PERIODS[period], net, fac_pts, grid_pts, supply, demand)
 
         del net
         gc.collect()
