@@ -115,43 +115,64 @@ def main():
         supply0[keep].join(fpct, how="left").reset_index().to_file(
             f"{OUT_DIR}/g2sfca_ts_facility_percentiles_{period}.gpkg", driver="GPKG")
 
-    # ── (1) 분위 접근성 지도 6장 (2행[시간대] × 3열[분위]), 6장 공통 색상 스케일 ──
+    # ── (1) 분위 접근성 지도 (2행[시간대] × 3열[분위]) — 단계구분도 2종: 등간격 / Natural Breaks ──
     allvals = np.concatenate([grids[p][[f"p{q:02d}" for q in PCTLS]].to_numpy(dtype=float).ravel()
                               for p in PERIODS])
-    vmax = np.nanpercentile(allvals[allvals > 0], 98) if np.any(allvals > 0) else 1.0
-
-    # 비연속(단계구분도) 공통 색상: 0~vmax 등간격 5단계 (6장 모두 동일 구간)
+    finite = allvals[np.isfinite(allvals)]
+    vmax = np.nanpercentile(finite[finite > 0], 98) if np.any(finite > 0) else 1.0
     N_CLASSES = 5
-    bounds_p = np.linspace(0.0, vmax, N_CLASSES + 1)
-    cmap_p = plt.get_cmap("YlGnBu", N_CLASSES)
-    norm_p = matplotlib.colors.BoundaryNorm(bounds_p, cmap_p.N)
 
-    fig, axes = plt.subplots(len(PERIODS), 3, figsize=(24, 15), facecolor="white")
-    fig.suptitle("Gaussian 2SFCA 의료접근성 분위 (평일 42일)", fontsize=28, fontweight="bold", y=0.99)
-    for r, period in enumerate(PERIODS):
-        g = grids[period]
-        for c, q in enumerate(PCTLS):
-            ax = axes[r, c]
-            if len(excluded):
-                excluded.plot(ax=ax, color=EXCLUDED_COLOR, edgecolor="none", zorder=0)
-            g.plot(ax=ax, column=f"p{q:02d}", cmap=cmap_p, norm=norm_p,
-                   legend=False, edgecolor="none", zorder=1)
-            target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.0, zorder=2)
-            ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
-                                     label="인구 0 (분석 제외)")],
-                      loc="lower left", fontsize=8, frameon=True)
-            ax.set_title(f"{PERIODS[period]} · {PCTL_LABEL[q]} (P{q:02d})",
-                         fontsize=15, fontweight="bold", pad=2)
-            ax.set_axis_off()
-            ax.set_anchor("N")      # 지도를 셀 상단에 붙여 제목-지도 간격 최소화
-            # 색상 범례: 라벨을 범례 아래 가로로
-            sm = matplotlib.cm.ScalarMappable(norm=norm_p, cmap=cmap_p); sm.set_array([])
-            cb = fig.colorbar(sm, ax=ax, shrink=0.55, extend="max")
-            cb.ax.set_xlabel("G2SFCA 접근성 지수", fontsize=9, labelpad=6)
-    fig.subplots_adjust(top=0.94, bottom=0.01, hspace=0.06, wspace=0.02)
-    out1 = f"{OUT_DIR}/g2sfca_ts_grid_percentile_maps.png"
-    plt.savefig(out1, dpi=160, facecolor="white", bbox_inches="tight"); plt.close(fig)
-    print("저장:", out1)
+    def plot_percentile_grid(cmap_p, norm_p, out_path, scheme_name, extend="max"):
+        """6장(시간대×분위) 단계구분도 생성. 모든 패널 동일 구간(norm_p)."""
+        fig, axes = plt.subplots(len(PERIODS), 3, figsize=(24, 15), facecolor="white")
+        fig.suptitle(f"Gaussian 2SFCA 의료접근성 분위 (평일 42일) — {scheme_name}",
+                     fontsize=26, fontweight="bold", y=0.99)
+        for r, period in enumerate(PERIODS):
+            g = grids[period]
+            for c, q in enumerate(PCTLS):
+                ax = axes[r, c]
+                if len(excluded):
+                    excluded.plot(ax=ax, color=EXCLUDED_COLOR, edgecolor="none", zorder=0)
+                g.plot(ax=ax, column=f"p{q:02d}", cmap=cmap_p, norm=norm_p,
+                       legend=False, edgecolor="none", zorder=1)
+                target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.0, zorder=2)
+                ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
+                                         label="인구 0 (분석 제외)")],
+                          loc="lower left", fontsize=8, frameon=True)
+                ax.set_title(f"{PERIODS[period]} · {PCTL_LABEL[q]} (P{q:02d})",
+                             fontsize=15, fontweight="bold", pad=2)
+                ax.set_axis_off(); ax.set_anchor("N")   # 지도를 셀 상단에 붙임
+                sm = matplotlib.cm.ScalarMappable(norm=norm_p, cmap=cmap_p); sm.set_array([])
+                cb = fig.colorbar(sm, ax=ax, shrink=0.55, extend=extend)
+                cb.ax.set_xlabel("G2SFCA 접근성 지수", fontsize=9, labelpad=6)
+        fig.subplots_adjust(top=0.94, bottom=0.01, hspace=0.06, wspace=0.02)
+        plt.savefig(out_path, dpi=160, facecolor="white", bbox_inches="tight"); plt.close(fig)
+        print("저장:", out_path)
+
+    # (1-a) 등간격(Equal Interval) — 기존 지도 유지
+    bounds_eq = np.linspace(0.0, vmax, N_CLASSES + 1)
+    cmap_eq = plt.get_cmap("YlGnBu", N_CLASSES)
+    plot_percentile_grid(cmap_eq, matplotlib.colors.BoundaryNorm(bounds_eq, cmap_eq.N),
+                         f"{OUT_DIR}/g2sfca_ts_grid_percentile_maps.png",
+                         "등간격(Equal Interval)", extend="max")
+
+    # (1-b) Natural Breaks(Jenks) — 6장 공통 구간(모든 분위·시간대 pooled 값으로 산정)
+    try:
+        import mapclassify
+        samp = finite
+        if len(samp) > 20000:   # 속도 위해 표본화(재현성 위해 고정 시드)
+            samp = np.random.default_rng(0).choice(samp, 20000, replace=False)
+        nb = mapclassify.NaturalBreaks(samp, k=N_CLASSES)
+        bounds_nb = np.unique(np.concatenate([[float(finite.min())],
+                                              np.asarray(nb.bins, dtype=float)]))
+        cmap_nb = plt.get_cmap("YlGnBu", len(bounds_nb) - 1)
+        plot_percentile_grid(cmap_nb, matplotlib.colors.BoundaryNorm(bounds_nb, cmap_nb.N),
+                             f"{OUT_DIR}/g2sfca_ts_grid_percentile_maps_naturalbreaks.png",
+                             "Natural Breaks(Jenks)", extend="neither")
+        print("Natural Breaks 구간:", np.round(bounds_nb, 4).tolist())
+    except ImportError:
+        print("[경고] mapclassify 미설치 → Natural Breaks 지도 생략. "
+              "설치: conda install -c conda-forge mapclassify")
 
     # ── (2) 시간대별 상대 감소율(%) 비교 지도 2장 (공통 스케일 0~100%) ──
     fig, axes = plt.subplots(1, len(PERIODS), figsize=(18, 10), facecolor="white")
