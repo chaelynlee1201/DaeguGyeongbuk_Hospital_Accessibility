@@ -122,6 +122,22 @@ def gini_ci(values, weights=None, B=500, seed=0):
     return g, lo, hi
 
 
+def gini_diff_ci(x_a, x_b, weights=None, B=500, seed=0):
+    """두 분포 지니 차이(gini_b - gini_a)의 짝지은(paired) 부트스트랩 95% CI.
+    같은 격자 표본을 양쪽에 동일 적용 → 상관을 반영한 차이 검정.
+    CI가 0을 포함하지 않으면 유의미한 차이."""
+    xa = np.asarray(x_a, dtype=float); xb = np.asarray(x_b, dtype=float)
+    w = None if weights is None else np.asarray(weights, dtype=float)
+    d = gini(xb, w) - gini(xa, w)
+    n = len(xa); rng = np.random.default_rng(seed); diffs = []
+    for _ in range(B):
+        idx = rng.integers(0, n, n)
+        wi = None if w is None else w[idx]
+        diffs.append(gini(xb[idx], wi) - gini(xa[idx], wi))
+    lo, hi = np.nanpercentile(diffs, [2.5, 97.5])
+    return d, lo, hi
+
+
 def main():
     set_korean_font()
 
@@ -191,7 +207,8 @@ def main():
                 ax.set_axis_off(); ax.set_anchor("N")   # 지도를 셀 상단에 붙임
                 sm = matplotlib.cm.ScalarMappable(norm=norm_p, cmap=cmap_p); sm.set_array([])
                 cb = fig.colorbar(sm, ax=ax, shrink=0.55, extend=extend)
-                cb.ax.set_xlabel("G2SFCA 접근성 지수 (×1000)", fontsize=9, labelpad=6)
+                cb.ax.set_xlabel("G2SFCA 접근성 지수\n(1,000명당 접근 가능 의사 수)",
+                                 fontsize=9, labelpad=6)
         fig.subplots_adjust(top=0.93, bottom=0.01, hspace=-0.15, wspace=0.02)
         plt.savefig(out_path, dpi=160, facecolor="white", bbox_inches="tight"); plt.close(fig)
         print("저장:", out_path)
@@ -243,6 +260,17 @@ def main():
             label = f"{PERIODS[period]} {disp}"
             print(f"{label:<22}{f'{gu:.3f} [{gul:.3f},{guh:.3f}]':<26}"
                   f"{f'{gw:.3f} [{gwl:.3f},{gwh:.3f}]':<26}")
+
+    # 유의성: 하위5%(P95) vs 상위5%(P05) 지니 차이 (짝지은 부트스트랩, CI가 0 미포함이면 유의)
+    print("\n[지니 차이 검정]  하위5%(P95) − 상위5%(P05)  (CI가 0을 포함하지 않으면 유의미)")
+    for period in PERIODS:
+        g = grids[period]
+        du, dul, duh = gini_diff_ci(g["p95"].values, g["p05"].values)
+        dw, dwl, dwh = gini_diff_ci(g["p95"].values, g["p05"].values, g["TOT_POP"].values)
+        su = "유의" if (dul > 0 or duh < 0) else "불확실"
+        sw = "유의" if (dwl > 0 or dwh < 0) else "불확실"
+        print(f"{PERIODS[period]:<12} 비가중 Δ={du:+.3f} [{dul:+.3f},{duh:+.3f}] ({su}) | "
+              f"인구가중 Δ={dw:+.3f} [{dwl:+.3f},{dwh:+.3f}] ({sw})")
 
     # 요약
     for period in PERIODS:
