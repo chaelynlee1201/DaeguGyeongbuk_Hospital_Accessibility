@@ -220,8 +220,8 @@ def main():
                          f"{OUT_DIR}/g2sfca_ts_grid_percentile_maps.png", extend="max")
 
     # ── (2) 시간대별 상대 감소율(%) 비교 지도 2장 (공통 스케일 0~100%) ──
-    fig, axes = plt.subplots(1, len(PERIODS), figsize=(18, 8.5), facecolor="white")
-    fig.suptitle("접근성 상대 감소율: 상위 5%(P05) 대비 하위 5%(P95)", fontsize=24, fontweight="bold", y=0.93)
+    fig, axes = plt.subplots(1, len(PERIODS), figsize=(18, 8), facecolor="white")
+    fig.suptitle("접근성 상대 감소율: 상위 5%(P05) 대비 하위 5%(P95)", fontsize=24, fontweight="bold", y=0.985)
     bounds = [0, 20, 40, 60, 80, 100]
     cmap = plt.get_cmap("OrRd")
     norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
@@ -242,7 +242,7 @@ def main():
         sm = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap); sm.set_array([])
         cb = fig.colorbar(sm, ax=ax, shrink=0.55)
         cb.ax.set_xlabel("상대 감소율 (%)", fontsize=10, labelpad=6)
-    fig.subplots_adjust(top=0.88, bottom=0.01, wspace=0.02)
+    fig.subplots_adjust(top=0.96, bottom=0.01, wspace=0.02)
     out2 = f"{OUT_DIR}/g2sfca_ts_decrease_maps.png"
     plt.savefig(out2, dpi=160, facecolor="white", bbox_inches="tight"); plt.close(fig)
     print("저장:", out2)
