@@ -120,6 +120,12 @@ def main():
                               for p in PERIODS])
     vmax = np.nanpercentile(allvals[allvals > 0], 98) if np.any(allvals > 0) else 1.0
 
+    # 비연속(단계구분도) 공통 색상: 0~vmax 등간격 5단계 (6장 모두 동일 구간)
+    N_CLASSES = 5
+    bounds_p = np.linspace(0.0, vmax, N_CLASSES + 1)
+    cmap_p = plt.get_cmap("YlGnBu", N_CLASSES)
+    norm_p = matplotlib.colors.BoundaryNorm(bounds_p, cmap_p.N)
+
     fig, axes = plt.subplots(len(PERIODS), 3, figsize=(27, 19), facecolor="white")
     for r, period in enumerate(PERIODS):
         g = grids[period]
@@ -127,9 +133,10 @@ def main():
             ax = axes[r, c]
             if len(excluded):
                 excluded.plot(ax=ax, color=EXCLUDED_COLOR, edgecolor="none", zorder=0)
-            g.plot(ax=ax, column=f"p{q:02d}", cmap="YlGnBu", vmin=0.0, vmax=vmax,
+            g.plot(ax=ax, column=f"p{q:02d}", cmap=cmap_p, norm=norm_p,
                    legend=True, edgecolor="none", zorder=1,
-                   legend_kwds={"shrink": 0.5, "label": "G2SFCA 접근성 지수"})
+                   legend_kwds={"shrink": 0.5, "label": "G2SFCA 접근성 지수",
+                                "extend": "max", "spacing": "uniform"})
             target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.1, zorder=2)
             ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
                                      label="인구 0 (분석 제외)")],
@@ -138,7 +145,7 @@ def main():
                          fontsize=14, fontweight="bold")
             ax.set_axis_off()
     fig.suptitle("의료시설 Gaussian 2SFCA 접근성 분위 — 2026 7~8월 평일 42일 (d0=60분, window 2h)\n"
-                 "p05=하위 5%(나쁜 날) · p50=중앙값 · p95=상위 5%(좋은 날), 6장 공통 색상 스케일",
+                 "p05=하위 5%(나쁜 날) · p50=중앙값 · p95=상위 5%(좋은 날), 6장 공통 단계구분(등간격 5단계)",
                  fontsize=17, fontweight="bold")
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     out1 = f"{OUT_DIR}/g2sfca_ts_grid_percentile_maps.png"
