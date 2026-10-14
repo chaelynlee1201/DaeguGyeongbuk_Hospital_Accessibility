@@ -35,7 +35,10 @@ EXCLUDED_COLOR = "#d9d9d9"  # 인구 0(분석 제외) 격자 표시색(회색)
 
 PERIODS = {"0900": "09:00 출발", "1200": "12:00 출발"}
 PCTLS = [5, 50, 95]
-PCTL_LABEL = {5: "하위 5%", 50: "중앙값 50%", 95: "상위 5%"}   # p95=상위 5%
+# 계산 백분위수(q) → (표시명, 초과확률 기준 P-코드)
+#  q=95(높은 값, 좋은 날) = '상위 5%' → 초과확률 5% → P05
+#  q=5 (낮은 값, 나쁜 날) = '하위 5%' → 초과확률 95% → P95
+DISPLAY = {5: ("하위 5%", "P95"), 50: ("중앙값", "P50"), 95: ("상위 5%", "P05")}
 TARGET_CODES = [
     "22010", "22020", "22030", "22040", "22050", "22060", "22070", "22510", "22520",
     "37050", "37030", "37070", "37100", "37560", "37570", "37580", "37590",
@@ -89,6 +92,22 @@ def load_excluded():
     return full[~(full["TOT_POP"] > 0)]
 
 
+def gini(values, weights=None):
+    """지니계수(0 포함). weights 주면 인구가중. 전부 0이면 NaN."""
+    x = np.asarray(values, dtype=float)
+    mask = np.isfinite(x)
+    w = np.ones_like(x) if weights is None else np.asarray(weights, dtype=float)
+    mask &= np.isfinite(w)
+    x, w = x[mask], np.clip(w[mask], 0, None)
+    if w.sum() == 0 or (x * w).sum() == 0:
+        return float("nan")
+    order = np.argsort(x, kind="mergesort")
+    x, w = x[order], w[order]
+    cw = np.concatenate([[0.0], np.cumsum(w) / w.sum()])
+    cxw = np.concatenate([[0.0], np.cumsum(w * x) / (w * x).sum()])
+    return float(1.0 - np.sum((cw[1:] - cw[:-1]) * (cxw[1:] + cxw[:-1])))
+
+
 def main():
     set_korean_font()
 
@@ -105,10 +124,20 @@ def main():
 
     grids = {}   # period -> GeoDataFrame(p05,p50,p95,dec_pct,geometry,TOT_POP)
     for period in PERIODS:
-        gpct = add_percentiles(load_perdate(period, "step2", "GRID_CD", "G2SFCA"))
+        gwide = load_perdate(period, "step2", "GRID_CD", "G2SFCA")
+        gpct = add_percentiles(gwide)
         g = demand0[["TOT_POP", "geometry"]].join(gpct, how="left")
         g.reset_index().to_file(f"{OUT_DIR}/g2sfca_ts_grid_percentiles_{period}.gpkg", driver="GPKG")
         grids[period] = g
+
+        # ── 진단: G2SFCA=0 비율 (요청2 검증) ──
+        arr = gwide.to_numpy(dtype=float)
+        byday_zero = (arr == 0).mean(axis=0)   # 날짜별 0 격자 비율
+        print(f"[{period}] 일평균 G2SFCA=0 격자 비율: {np.nanmean(byday_zero)*100:.1f}% "
+              f"(일자별 {np.nanmin(byday_zero)*100:.1f}~{np.nanmax(byday_zero)*100:.1f}%)")
+        for q in PCTLS:
+            name, pcode = DISPLAY[q]
+            print(f"      {name}({pcode}) 값=0 격자 비율: {(g[f'p{q:02d}']==0).mean()*100:.1f}%")
         # 시설(Step1)도 저장(지도는 격자만, 시설은 데이터로 보관)
         fpct = add_percentiles(load_perdate(period, "step1", "FAC_ID", "step1"))
         keep = [c for c in ["N_DOCTOR", "FAC_NM", "FAC_TYPE", "geometry"] if c in supply0.columns]
@@ -124,9 +153,10 @@ def main():
 
     def plot_percentile_grid(cmap_p, norm_p, out_path, scheme_name, extend="max"):
         """6장(시간대×분위) 단계구분도 생성. 모든 패널 동일 구간(norm_p)."""
-        fig, axes = plt.subplots(len(PERIODS), 3, figsize=(24, 15), facecolor="white")
+        # 높이를 줄여 셀 내 세로 여백 축소 → 상·하단 행 간격, 제목-지도 간격 감소
+        fig, axes = plt.subplots(len(PERIODS), 3, figsize=(24, 11.5), facecolor="white")
         fig.suptitle(f"Gaussian 2SFCA 의료접근성 분위 (평일 42일) — {scheme_name}",
-                     fontsize=26, fontweight="bold", y=0.99)
+                     fontsize=26, fontweight="bold", y=0.975)
         for r, period in enumerate(PERIODS):
             g = grids[period]
             for c, q in enumerate(PCTLS):
@@ -139,13 +169,14 @@ def main():
                 ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
                                          label="인구 0 (분석 제외)")],
                           loc="lower left", fontsize=8, frameon=True)
-                ax.set_title(f"{PERIODS[period]} · {PCTL_LABEL[q]} (P{q:02d})",
-                             fontsize=15, fontweight="bold", pad=2)
+                name, pcode = DISPLAY[q]
+                ax.set_title(f"{PERIODS[period]} · {name} ({pcode})",
+                             fontsize=15, fontweight="bold", pad=1)
                 ax.set_axis_off(); ax.set_anchor("N")   # 지도를 셀 상단에 붙임
                 sm = matplotlib.cm.ScalarMappable(norm=norm_p, cmap=cmap_p); sm.set_array([])
                 cb = fig.colorbar(sm, ax=ax, shrink=0.55, extend=extend)
                 cb.ax.set_xlabel("G2SFCA 접근성 지수", fontsize=9, labelpad=6)
-        fig.subplots_adjust(top=0.94, bottom=0.01, hspace=0.06, wspace=0.02)
+        fig.subplots_adjust(top=0.93, bottom=0.01, hspace=-0.15, wspace=0.02)
         plt.savefig(out_path, dpi=160, facecolor="white", bbox_inches="tight"); plt.close(fig)
         print("저장:", out_path)
 
@@ -176,7 +207,7 @@ def main():
 
     # ── (2) 시간대별 상대 감소율(%) 비교 지도 2장 (공통 스케일 0~100%) ──
     fig, axes = plt.subplots(1, len(PERIODS), figsize=(18, 10), facecolor="white")
-    fig.suptitle("접근성 상대 감소율: 상위 5% 대비 하위 5%", fontsize=24, fontweight="bold", y=0.97)
+    fig.suptitle("접근성 상대 감소율: 상위 5%(P05) 대비 하위 5%(P95)", fontsize=24, fontweight="bold", y=0.97)
     bounds = [0, 20, 40, 60, 80, 100]
     cmap = plt.get_cmap("OrRd")
     norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
@@ -184,12 +215,12 @@ def main():
         g = grids[period]
         if len(excluded):
             excluded.plot(ax=ax, color=EXCLUDED_COLOR, edgecolor="none", zorder=0)
-        # p95=0 등으로 dec_pct가 NaN인 격자: 회색(missing)으로 표시
+        # 상위5%(P05)=0 등으로 dec_pct가 NaN인 격자: 회색(missing)으로 표시
         g.plot(ax=ax, column="dec_pct", cmap=cmap, norm=norm, legend=False,
                edgecolor="none", zorder=1, missing_kwds={"color": EXCLUDED_COLOR})
         target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.0, zorder=2)
         ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
-                                 label="인구 0 또는 p95=0 (산정 제외)")],
+                                 label="인구 0 또는 상위5%(P05)=0 (산정 제외)")],
                   loc="lower left", fontsize=9, frameon=True)
         ax.set_title(f"{PERIODS[period]}", fontsize=16, fontweight="bold", pad=2)
         ax.set_axis_off()
@@ -202,10 +233,23 @@ def main():
     plt.savefig(out2, dpi=160, facecolor="white", bbox_inches="tight"); plt.close(fig)
     print("저장:", out2)
 
+    # ── (3) 지니계수: 접근성 공간 불평등 (0 포함, 수요격자 기준) ──
+    #   상위 5%(P05) = 계산상 95백분위(높은 값) / 하위 5%(P95) = 계산상 5백분위(낮은 값)
+    print("\n[지니계수] 접근성 공간 불평등  (값 클수록 불평등, 1에 가까움)")
+    print(f"{'구분':<20}{'비가중':>10}{'인구가중':>10}")
+    layers = [("p95", "상위5%(P05)"), ("p50", "중앙값(P50)"), ("p05", "하위5%(P95)")]
+    for period in PERIODS:
+        g = grids[period]
+        for col, disp in layers:
+            gu = gini(g[col].values)
+            gw = gini(g[col].values, g["TOT_POP"].values)
+            print(f"{PERIODS[period]+' '+disp:<20}{gu:>10.3f}{gw:>10.3f}")
+
     # 요약
     for period in PERIODS:
-        print(f"\n[{PERIODS[period]}] 격자 분위·감소율 요약")
-        print(grids[period][["p05", "p50", "p95", "dec_pct"]].describe().round(3).to_string())
+        print(f"\n[{PERIODS[period]}] 격자 분위·감소율 요약 "
+              f"(p95=상위5%/P05, p05=하위5%/P95)")
+        print(grids[period][["p05", "p50", "p95", "dec_pct"]].describe().round(4).to_string())
 
 
 if __name__ == "__main__":
