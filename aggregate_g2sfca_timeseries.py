@@ -126,16 +126,12 @@ def main():
     cmap_p = plt.get_cmap("YlGnBu", N_CLASSES)
     norm_p = matplotlib.colors.BoundaryNorm(bounds_p, cmap_p.N)
 
-    fig = plt.figure(figsize=(26, 18), facecolor="white")
-    fig.suptitle("Gaussian 2SFCA 의료접근성 분위 (평일 42일)", fontsize=30, fontweight="bold", y=0.985)
-    # 시간대(09:00/12:00)를 연한 회색 박스(서브피규어)로 묶고 각 행에 부제목
-    subfigs = fig.subfigures(len(PERIODS), 1, hspace=0.02)
-    for sf, period in zip(np.atleast_1d(subfigs), PERIODS):
-        sf.set_facecolor("#eceff1")                       # 연한 회색 박스
-        sf.suptitle(PERIODS[period], fontsize=22, fontweight="bold", y=0.99)
-        axs = sf.subplots(1, 3)
+    fig, axes = plt.subplots(len(PERIODS), 3, figsize=(24, 15), facecolor="white")
+    fig.suptitle("Gaussian 2SFCA 의료접근성 분위 (평일 42일)", fontsize=28, fontweight="bold", y=0.99)
+    for r, period in enumerate(PERIODS):
         g = grids[period]
-        for ax, q in zip(axs, PCTLS):
+        for c, q in enumerate(PCTLS):
+            ax = axes[r, c]
             if len(excluded):
                 excluded.plot(ax=ax, color=EXCLUDED_COLOR, edgecolor="none", zorder=0)
             g.plot(ax=ax, column=f"p{q:02d}", cmap=cmap_p, norm=norm_p,
@@ -144,19 +140,22 @@ def main():
             ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
                                      label="인구 0 (분석 제외)")],
                       loc="lower left", fontsize=8, frameon=True)
-            ax.set_title(f"{PCTL_LABEL[q]} (P{q:02d})", fontsize=18, fontweight="bold", pad=3)
+            ax.set_title(f"{PERIODS[period]} · {PCTL_LABEL[q]} (P{q:02d})",
+                         fontsize=15, fontweight="bold", pad=2)
             ax.set_axis_off()
+            ax.set_anchor("N")      # 지도를 셀 상단에 붙여 제목-지도 간격 최소화
             # 색상 범례: 라벨을 범례 아래 가로로
             sm = matplotlib.cm.ScalarMappable(norm=norm_p, cmap=cmap_p); sm.set_array([])
-            cb = sf.colorbar(sm, ax=ax, shrink=0.55, extend="max")
+            cb = fig.colorbar(sm, ax=ax, shrink=0.55, extend="max")
             cb.ax.set_xlabel("G2SFCA 접근성 지수", fontsize=9, labelpad=6)
+    fig.subplots_adjust(top=0.94, bottom=0.01, hspace=0.06, wspace=0.02)
     out1 = f"{OUT_DIR}/g2sfca_ts_grid_percentile_maps.png"
-    plt.savefig(out1, dpi=160, facecolor="white"); plt.close(fig)
+    plt.savefig(out1, dpi=160, facecolor="white", bbox_inches="tight"); plt.close(fig)
     print("저장:", out1)
 
     # ── (2) 시간대별 상대 감소율(%) 비교 지도 2장 (공통 스케일 0~100%) ──
-    fig, axes = plt.subplots(1, len(PERIODS), figsize=(19, 11), facecolor="white")
-    fig.suptitle("접근성 상대 감소율: 상위 5% 대비 하위 5%", fontsize=26, fontweight="bold", y=0.96)
+    fig, axes = plt.subplots(1, len(PERIODS), figsize=(18, 10), facecolor="white")
+    fig.suptitle("접근성 상대 감소율: 상위 5% 대비 하위 5%", fontsize=24, fontweight="bold", y=0.97)
     bounds = [0, 20, 40, 60, 80, 100]
     cmap = plt.get_cmap("OrRd")
     norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
@@ -171,13 +170,15 @@ def main():
         ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
                                  label="인구 0 또는 p95=0 (산정 제외)")],
                   loc="lower left", fontsize=9, frameon=True)
-        ax.set_title(f"{PERIODS[period]}", fontsize=18, fontweight="bold", pad=3)
+        ax.set_title(f"{PERIODS[period]}", fontsize=16, fontweight="bold", pad=2)
         ax.set_axis_off()
+        ax.set_anchor("N")      # 지도를 셀 상단에 붙여 제목-지도 간격 최소화
         sm = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap); sm.set_array([])
         cb = fig.colorbar(sm, ax=ax, shrink=0.55)
         cb.ax.set_xlabel("상대 감소율 (%)", fontsize=10, labelpad=6)
+    fig.subplots_adjust(top=0.92, bottom=0.01, wspace=0.02)
     out2 = f"{OUT_DIR}/g2sfca_ts_decrease_maps.png"
-    plt.savefig(out2, dpi=160, facecolor="white"); plt.close(fig)
+    plt.savefig(out2, dpi=160, facecolor="white", bbox_inches="tight"); plt.close(fig)
     print("저장:", out2)
 
     # 요약
