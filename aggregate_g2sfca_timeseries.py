@@ -126,34 +126,37 @@ def main():
     cmap_p = plt.get_cmap("YlGnBu", N_CLASSES)
     norm_p = matplotlib.colors.BoundaryNorm(bounds_p, cmap_p.N)
 
-    fig, axes = plt.subplots(len(PERIODS), 3, figsize=(27, 19), facecolor="white")
-    for r, period in enumerate(PERIODS):
+    fig = plt.figure(figsize=(26, 18), facecolor="white")
+    fig.suptitle("Gaussian 2SFCA 의료접근성 분위 (평일 42일)", fontsize=30, fontweight="bold", y=0.985)
+    # 시간대(09:00/12:00)를 연한 회색 박스(서브피규어)로 묶고 각 행에 부제목
+    subfigs = fig.subfigures(len(PERIODS), 1, hspace=0.02)
+    for sf, period in zip(np.atleast_1d(subfigs), PERIODS):
+        sf.set_facecolor("#eceff1")                       # 연한 회색 박스
+        sf.suptitle(PERIODS[period], fontsize=22, fontweight="bold", y=0.99)
+        axs = sf.subplots(1, 3)
         g = grids[period]
-        for c, q in enumerate(PCTLS):
-            ax = axes[r, c]
+        for ax, q in zip(axs, PCTLS):
             if len(excluded):
                 excluded.plot(ax=ax, color=EXCLUDED_COLOR, edgecolor="none", zorder=0)
             g.plot(ax=ax, column=f"p{q:02d}", cmap=cmap_p, norm=norm_p,
-                   legend=True, edgecolor="none", zorder=1,
-                   legend_kwds={"shrink": 0.5, "label": "G2SFCA 접근성 지수",
-                                "extend": "max", "spacing": "uniform"})
-            target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.1, zorder=2)
+                   legend=False, edgecolor="none", zorder=1)
+            target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.0, zorder=2)
             ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
                                      label="인구 0 (분석 제외)")],
-                      loc="lower left", fontsize=9, frameon=True)
-            ax.set_title(f"{PERIODS[period]} · {PCTL_LABEL[q]} (p{q:02d})",
-                         fontsize=14, fontweight="bold")
+                      loc="lower left", fontsize=8, frameon=True)
+            ax.set_title(f"{PCTL_LABEL[q]} (P{q:02d})", fontsize=18, fontweight="bold", pad=3)
             ax.set_axis_off()
-    fig.suptitle("의료시설 Gaussian 2SFCA 접근성 분위 — 2026 7~8월 평일 42일 (d0=60분, window 2h)\n"
-                 "p05=하위 5%(나쁜 날) · p50=중앙값 · p95=상위 5%(좋은 날), 6장 공통 단계구분(등간격 5단계)",
-                 fontsize=17, fontweight="bold")
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
+            # 색상 범례: 라벨을 범례 아래 가로로
+            sm = matplotlib.cm.ScalarMappable(norm=norm_p, cmap=cmap_p); sm.set_array([])
+            cb = sf.colorbar(sm, ax=ax, shrink=0.55, extend="max")
+            cb.ax.set_xlabel("G2SFCA 접근성 지수", fontsize=9, labelpad=6)
     out1 = f"{OUT_DIR}/g2sfca_ts_grid_percentile_maps.png"
     plt.savefig(out1, dpi=160, facecolor="white"); plt.close(fig)
     print("저장:", out1)
 
     # ── (2) 시간대별 상대 감소율(%) 비교 지도 2장 (공통 스케일 0~100%) ──
-    fig, axes = plt.subplots(1, len(PERIODS), figsize=(20, 11), facecolor="white")
+    fig, axes = plt.subplots(1, len(PERIODS), figsize=(19, 11), facecolor="white")
+    fig.suptitle("접근성 상대 감소율: 상위 5% 대비 하위 5%", fontsize=26, fontweight="bold", y=0.96)
     bounds = [0, 20, 40, 60, 80, 100]
     cmap = plt.get_cmap("OrRd")
     norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
@@ -162,19 +165,17 @@ def main():
         if len(excluded):
             excluded.plot(ax=ax, color=EXCLUDED_COLOR, edgecolor="none", zorder=0)
         # p95=0 등으로 dec_pct가 NaN인 격자: 회색(missing)으로 표시
-        g.plot(ax=ax, column="dec_pct", cmap=cmap, norm=norm, legend=True,
-               edgecolor="none", zorder=1, missing_kwds={"color": EXCLUDED_COLOR},
-               legend_kwds={"shrink": 0.5, "label": "상위5%→하위5% 상대 감소율 (%)"})
-        target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.1, zorder=2)
+        g.plot(ax=ax, column="dec_pct", cmap=cmap, norm=norm, legend=False,
+               edgecolor="none", zorder=1, missing_kwds={"color": EXCLUDED_COLOR})
+        target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.0, zorder=2)
         ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
                                  label="인구 0 또는 p95=0 (산정 제외)")],
                   loc="lower left", fontsize=9, frameon=True)
-        ax.set_title(f"{PERIODS[period]} · 접근성 상대 감소율", fontsize=14, fontweight="bold")
+        ax.set_title(f"{PERIODS[period]}", fontsize=18, fontweight="bold", pad=3)
         ax.set_axis_off()
-    fig.suptitle("접근성 변동성: 상위 5%(좋은 날) 대비 하위 5%(나쁜 날) 상대 감소율(%)\n"
-                 "값이 클수록 '좋은 날 대비 나쁜 날' 접근성이 크게 떨어지는(불안정한) 지역",
-                 fontsize=16, fontweight="bold")
-    plt.tight_layout(rect=[0, 0, 1, 0.93])
+        sm = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap); sm.set_array([])
+        cb = fig.colorbar(sm, ax=ax, shrink=0.55)
+        cb.ax.set_xlabel("상대 감소율 (%)", fontsize=10, labelpad=6)
     out2 = f"{OUT_DIR}/g2sfca_ts_decrease_maps.png"
     plt.savefig(out2, dpi=160, facecolor="white"); plt.close(fig)
     print("저장:", out2)
