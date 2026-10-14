@@ -39,6 +39,7 @@ PCTLS = [5, 50, 95]
 #  q=95(높은 값, 좋은 날) = '상위 5%' → 초과확률 5% → P05
 #  q=5 (낮은 값, 나쁜 날) = '하위 5%' → 초과확률 95% → P95
 DISPLAY = {5: ("하위 5%", "P95"), 50: ("중앙값", "P50"), 95: ("상위 5%", "P05")}
+SCALE = 1000   # 설명 편의를 위해 G2SFCA 값에 곱하는 배율(지도·요약 표시용; 지니·감소율은 배율 무관)
 TARGET_CODES = [
     "22010", "22020", "22030", "22040", "22050", "22060", "22070", "22510", "22520",
     "37050", "37030", "37070", "37100", "37560", "37570", "37580", "37590",
@@ -108,6 +109,19 @@ def gini(values, weights=None):
     return float(1.0 - np.sum((cw[1:] - cw[:-1]) * (cxw[1:] + cxw[:-1])))
 
 
+def gini_ci(values, weights=None, B=500, seed=0):
+    """지니계수와 부트스트랩 95% 신뢰구간(격자 재표집)."""
+    x = np.asarray(values, dtype=float)
+    w = None if weights is None else np.asarray(weights, dtype=float)
+    g = gini(x, w)
+    n = len(x)
+    rng = np.random.default_rng(seed)
+    boots = [gini(x[idx], None if w is None else w[idx])
+             for idx in (rng.integers(0, n, n) for _ in range(B))]
+    lo, hi = np.nanpercentile(boots, [2.5, 97.5])
+    return g, lo, hi
+
+
 def main():
     set_korean_font()
 
@@ -124,22 +138,24 @@ def main():
 
     grids = {}   # period -> GeoDataFrame(p05,p50,p95,dec_pct,geometry,TOT_POP)
     for period in PERIODS:
-        gwide = load_perdate(period, "step2", "GRID_CD", "G2SFCA")
+        gwide = load_perdate(period, "step2", "GRID_CD", "G2SFCA") * SCALE   # 설명 편의 ×1000
         gpct = add_percentiles(gwide)
         g = demand0[["TOT_POP", "geometry"]].join(gpct, how="left")
         g.reset_index().to_file(f"{OUT_DIR}/g2sfca_ts_grid_percentiles_{period}.gpkg", driver="GPKG")
         grids[period] = g
 
-        # ── 진단: G2SFCA=0 비율 (요청2 검증) ──
+        # ── 진단: G2SFCA=0 비율 ──
         arr = gwide.to_numpy(dtype=float)
         byday_zero = (arr == 0).mean(axis=0)   # 날짜별 0 격자 비율
+        always_zero = (np.nanmax(arr, axis=1) == 0).mean() * 100   # 42일 내내 0(완전 미도달)
+        print(f"[{period}] 42일 내내 G2SFCA=0 (완전 미도달) 격자: {always_zero:.1f}%")
         print(f"[{period}] 일평균 G2SFCA=0 격자 비율: {np.nanmean(byday_zero)*100:.1f}% "
               f"(일자별 {np.nanmin(byday_zero)*100:.1f}~{np.nanmax(byday_zero)*100:.1f}%)")
         for q in PCTLS:
             name, pcode = DISPLAY[q]
             print(f"      {name}({pcode}) 값=0 격자 비율: {(g[f'p{q:02d}']==0).mean()*100:.1f}%")
         # 시설(Step1)도 저장(지도는 격자만, 시설은 데이터로 보관)
-        fpct = add_percentiles(load_perdate(period, "step1", "FAC_ID", "step1"))
+        fpct = add_percentiles(load_perdate(period, "step1", "FAC_ID", "step1") * SCALE)
         keep = [c for c in ["N_DOCTOR", "FAC_NM", "FAC_TYPE", "geometry"] if c in supply0.columns]
         supply0[keep].join(fpct, how="left").reset_index().to_file(
             f"{OUT_DIR}/g2sfca_ts_facility_percentiles_{period}.gpkg", driver="GPKG")
@@ -151,11 +167,11 @@ def main():
     vmax = np.nanpercentile(finite[finite > 0], 98) if np.any(finite > 0) else 1.0
     N_CLASSES = 5
 
-    def plot_percentile_grid(cmap_p, norm_p, out_path, scheme_name, extend="max"):
+    def plot_percentile_grid(cmap_p, norm_p, out_path, extend="max"):
         """6장(시간대×분위) 단계구분도 생성. 모든 패널 동일 구간(norm_p)."""
         # 높이를 줄여 셀 내 세로 여백 축소 → 상·하단 행 간격, 제목-지도 간격 감소
         fig, axes = plt.subplots(len(PERIODS), 3, figsize=(24, 11.5), facecolor="white")
-        fig.suptitle(f"Gaussian 2SFCA 의료접근성 분위 (평일 42일) — {scheme_name}",
+        fig.suptitle("Gaussian 2SFCA 의료접근성 분위 (평일 42일)",
                      fontsize=26, fontweight="bold", y=0.975)
         for r, period in enumerate(PERIODS):
             g = grids[period]
@@ -175,35 +191,16 @@ def main():
                 ax.set_axis_off(); ax.set_anchor("N")   # 지도를 셀 상단에 붙임
                 sm = matplotlib.cm.ScalarMappable(norm=norm_p, cmap=cmap_p); sm.set_array([])
                 cb = fig.colorbar(sm, ax=ax, shrink=0.55, extend=extend)
-                cb.ax.set_xlabel("G2SFCA 접근성 지수", fontsize=9, labelpad=6)
+                cb.ax.set_xlabel("G2SFCA 접근성 지수 (×1000)", fontsize=9, labelpad=6)
         fig.subplots_adjust(top=0.93, bottom=0.01, hspace=-0.15, wspace=0.02)
         plt.savefig(out_path, dpi=160, facecolor="white", bbox_inches="tight"); plt.close(fig)
         print("저장:", out_path)
 
-    # (1-a) 등간격(Equal Interval) — 기존 지도 유지
+    # 등간격(Equal Interval) 단계구분도
     bounds_eq = np.linspace(0.0, vmax, N_CLASSES + 1)
     cmap_eq = plt.get_cmap("YlGnBu", N_CLASSES)
     plot_percentile_grid(cmap_eq, matplotlib.colors.BoundaryNorm(bounds_eq, cmap_eq.N),
-                         f"{OUT_DIR}/g2sfca_ts_grid_percentile_maps.png",
-                         "등간격(Equal Interval)", extend="max")
-
-    # (1-b) Natural Breaks(Jenks) — 6장 공통 구간(모든 분위·시간대 pooled 값으로 산정)
-    try:
-        import mapclassify
-        samp = finite
-        if len(samp) > 20000:   # 속도 위해 표본화(재현성 위해 고정 시드)
-            samp = np.random.default_rng(0).choice(samp, 20000, replace=False)
-        nb = mapclassify.NaturalBreaks(samp, k=N_CLASSES)
-        bounds_nb = np.unique(np.concatenate([[float(finite.min())],
-                                              np.asarray(nb.bins, dtype=float)]))
-        cmap_nb = plt.get_cmap("YlGnBu", len(bounds_nb) - 1)
-        plot_percentile_grid(cmap_nb, matplotlib.colors.BoundaryNorm(bounds_nb, cmap_nb.N),
-                             f"{OUT_DIR}/g2sfca_ts_grid_percentile_maps_naturalbreaks.png",
-                             "Natural Breaks(Jenks)", extend="neither")
-        print("Natural Breaks 구간:", np.round(bounds_nb, 4).tolist())
-    except ImportError:
-        print("[경고] mapclassify 미설치 → Natural Breaks 지도 생략. "
-              "설치: conda install -c conda-forge mapclassify")
+                         f"{OUT_DIR}/g2sfca_ts_grid_percentile_maps.png", extend="max")
 
     # ── (2) 시간대별 상대 감소율(%) 비교 지도 2장 (공통 스케일 0~100%) ──
     fig, axes = plt.subplots(1, len(PERIODS), figsize=(18, 10), facecolor="white")
@@ -235,15 +232,17 @@ def main():
 
     # ── (3) 지니계수: 접근성 공간 불평등 (0 포함, 수요격자 기준) ──
     #   상위 5%(P05) = 계산상 95백분위(높은 값) / 하위 5%(P95) = 계산상 5백분위(낮은 값)
-    print("\n[지니계수] 접근성 공간 불평등  (값 클수록 불평등, 1에 가까움)")
-    print(f"{'구분':<20}{'비가중':>10}{'인구가중':>10}")
+    print("\n[지니계수] 접근성 공간 불평등  (0 포함, 값 클수록 불평등 / [ ]=부트스트랩 95% CI)")
+    print(f"{'구분':<22}{'비가중 [95% CI]':<26}{'인구가중 [95% CI]':<26}")
     layers = [("p95", "상위5%(P05)"), ("p50", "중앙값(P50)"), ("p05", "하위5%(P95)")]
     for period in PERIODS:
         g = grids[period]
         for col, disp in layers:
-            gu = gini(g[col].values)
-            gw = gini(g[col].values, g["TOT_POP"].values)
-            print(f"{PERIODS[period]+' '+disp:<20}{gu:>10.3f}{gw:>10.3f}")
+            gu, gul, guh = gini_ci(g[col].values)
+            gw, gwl, gwh = gini_ci(g[col].values, g["TOT_POP"].values)
+            label = f"{PERIODS[period]} {disp}"
+            print(f"{label:<22}{f'{gu:.3f} [{gul:.3f},{guh:.3f}]':<26}"
+                  f"{f'{gw:.3f} [{gwl:.3f},{gwh:.3f}]':<26}")
 
     # 요약
     for period in PERIODS:
