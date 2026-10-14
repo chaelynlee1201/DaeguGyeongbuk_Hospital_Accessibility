@@ -220,8 +220,8 @@ def main():
                          f"{OUT_DIR}/g2sfca_ts_grid_percentile_maps.png", extend="max")
 
     # ── (2) 시간대별 상대 감소율(%) 비교 지도 2장 (공통 스케일 0~100%) ──
-    fig, axes = plt.subplots(1, len(PERIODS), figsize=(18, 10), facecolor="white")
-    fig.suptitle("접근성 상대 감소율: 상위 5%(P05) 대비 하위 5%(P95)", fontsize=24, fontweight="bold", y=0.97)
+    fig, axes = plt.subplots(1, len(PERIODS), figsize=(18, 8.5), facecolor="white")
+    fig.suptitle("접근성 상대 감소율: 상위 5%(P05) 대비 하위 5%(P95)", fontsize=24, fontweight="bold", y=0.93)
     bounds = [0, 20, 40, 60, 80, 100]
     cmap = plt.get_cmap("OrRd")
     norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
@@ -242,35 +242,12 @@ def main():
         sm = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap); sm.set_array([])
         cb = fig.colorbar(sm, ax=ax, shrink=0.55)
         cb.ax.set_xlabel("상대 감소율 (%)", fontsize=10, labelpad=6)
-    fig.subplots_adjust(top=0.92, bottom=0.01, wspace=0.02)
+    fig.subplots_adjust(top=0.88, bottom=0.01, wspace=0.02)
     out2 = f"{OUT_DIR}/g2sfca_ts_decrease_maps.png"
     plt.savefig(out2, dpi=160, facecolor="white", bbox_inches="tight"); plt.close(fig)
     print("저장:", out2)
 
-    # ── (3) 지니계수: 접근성 공간 불평등 (0 포함, 수요격자 기준) ──
-    #   상위 5%(P05) = 계산상 95백분위(높은 값) / 하위 5%(P95) = 계산상 5백분위(낮은 값)
-    print("\n[지니계수] 접근성 공간 불평등  (0 포함, 값 클수록 불평등 / [ ]=부트스트랩 95% CI)")
-    print(f"{'구분':<22}{'비가중 [95% CI]':<26}{'인구가중 [95% CI]':<26}")
-    layers = [("p95", "상위5%(P05)"), ("p50", "중앙값(P50)"), ("p05", "하위5%(P95)")]
-    for period in PERIODS:
-        g = grids[period]
-        for col, disp in layers:
-            gu, gul, guh = gini_ci(g[col].values)
-            gw, gwl, gwh = gini_ci(g[col].values, g["TOT_POP"].values)
-            label = f"{PERIODS[period]} {disp}"
-            print(f"{label:<22}{f'{gu:.3f} [{gul:.3f},{guh:.3f}]':<26}"
-                  f"{f'{gw:.3f} [{gwl:.3f},{gwh:.3f}]':<26}")
-
-    # 유의성: 하위5%(P95) vs 상위5%(P05) 지니 차이 (짝지은 부트스트랩, CI가 0 미포함이면 유의)
-    print("\n[지니 차이 검정]  하위5%(P95) − 상위5%(P05)  (CI가 0을 포함하지 않으면 유의미)")
-    for period in PERIODS:
-        g = grids[period]
-        du, dul, duh = gini_diff_ci(g["p95"].values, g["p05"].values)
-        dw, dwl, dwh = gini_diff_ci(g["p95"].values, g["p05"].values, g["TOT_POP"].values)
-        su = "유의" if (dul > 0 or duh < 0) else "불확실"
-        sw = "유의" if (dwl > 0 or dwh < 0) else "불확실"
-        print(f"{PERIODS[period]:<12} 비가중 Δ={du:+.3f} [{dul:+.3f},{duh:+.3f}] ({su}) | "
-              f"인구가중 Δ={dw:+.3f} [{dwl:+.3f},{dwh:+.3f}] ({sw})")
+    # (지니계수 출력은 일단 제외 — gini/gini_ci/gini_diff_ci 함수는 보존, 필요시 재활성화)
 
     # 요약
     for period in PERIODS:
