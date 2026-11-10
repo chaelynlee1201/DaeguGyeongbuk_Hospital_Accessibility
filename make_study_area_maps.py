@@ -114,19 +114,27 @@ def main():
                                                linestyle="--", zorder=1)
     target.plot(ax=ax, color="#eef4f8", edgecolor="#2c2c2c", linewidth=1.2, zorder=2)
 
-    # 종별 구분 없이 단색 점으로 표시
-    fac.plot(ax=ax, color="#c0392b", markersize=6, alpha=0.7, zorder=3)
+    # 원 크기 ∝ 총의사수 (면적 비례: markersize ∝ 의사수)
+    import math
+    dmax = float(fac["N_DOCTOR"].max())
+    msize = 8 + (fac["N_DOCTOR"] / dmax) * 900
+    ax.scatter(fac.geometry.x, fac.geometry.y, s=msize, facecolor="#c0392b",
+               edgecolor="white", linewidth=0.3, alpha=0.55, zorder=3)
 
     bminx, bminy, bmaxx, bmaxy = buf.bounds
     bx, by = (bmaxx - bminx) * 0.05, (bmaxy - bminy) * 0.05
     ax.set_xlim(bminx - bx, bmaxx + bx); ax.set_ylim(bminy - by, bmaxy + by)
-    ax.set_title(f"의료시설 분포 (7종·총의사수>0, 20km 버퍼 내 {len(fac):,}개)",
+    ax.set_title(f"의료시설 및 총의사수 (7종·총의사수>0, 20km 버퍼 내 {len(fac):,}개)",
                  fontsize=18, fontweight="bold", pad=8)
     ax.set_axis_off()
+    legvals = sorted({int(round(v)) for v in [max(1, dmax * 0.1), dmax * 0.4, dmax] if v >= 1})
     handles = [Line2D([0], [0], marker="o", color="none", markerfacecolor="#c0392b",
-                      markersize=7, alpha=0.8, label=f"의료시설 ({len(fac):,}개)"),
-               Line2D([0], [0], color="#e07b39", lw=1.2, ls="--", label="20km 버퍼")]
-    ax.legend(handles=handles, loc="lower left", fontsize=10, frameon=True)
+                      alpha=0.55, markeredgecolor="white",
+                      markersize=math.sqrt(8 + (v / dmax) * 900), label=f"의사 {v}명")
+               for v in legvals]
+    handles.append(Line2D([0], [0], color="#e07b39", lw=1.2, ls="--", label="20km 버퍼"))
+    ax.legend(handles=handles, loc="lower left", fontsize=9, frameon=True,
+              title="총의사수", labelspacing=1.4, borderpad=1.0)
     plt.tight_layout()
     out2 = f"{OUT_DIR}/medical_facilities_supply.png"
     plt.savefig(out2, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
