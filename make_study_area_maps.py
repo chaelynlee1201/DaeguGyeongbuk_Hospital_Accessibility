@@ -1,7 +1,11 @@
 """
-연구 방법 슬라이드용 지도 2장 생성.
- (1) 연구 지역 경계 지도 — 대구·경북 10개 시·군·구(17개 행정경계), 시군구명 라벨
- (2) 필터링된 의료시설 분포 지도 — 7종별 + 총의사수>0, 대상 20km 버퍼 내 (공급지)
+연구 방법 슬라이드용 지도 생성.
+ (1) 연구 지역 경계 — 대구·경북 10개 시·군·구(17개 행정경계), 시군구명 라벨
+ (2) 필터링된 의료시설 분포 — 7종·총의사수>0, 20km 버퍼 내 (단색 점)
+ (3) 1km 인구 단계구분도 (분위 5단계)
+ (4) 분석 사용 격자(인구>0) 단색
+ (5) 의사수 비례 원(proportional symbol) 의료시설 지도
+ (6) 인구 단계구분도 + OSM 도로망 오버레이 (pyrosm 필요)
 
 실행(서버):
   conda activate GTFS
@@ -21,6 +25,7 @@ OUT_DIR = "data/study_area_maps"
 SUPPLY_GPKG = "data/g2sfca_timeseries/supply_ref.gpkg"   # compute가 만든 최종 공급 시설
 DEMAND_GPKG = "data/g2sfca_timeseries/demand_ref.gpkg"   # 분석 사용(인구>0) 격자
 GRID_SHP = "data/grid_1km_population_daegugyeongbuk/grid_1km_population_daegugyeongbuk.shp"
+OSM_PBF = "data/raw_gtfs_network/daegyeong.osm.pbf"
 TARGET_CODES = [
     "22010", "22020", "22030", "22040", "22050", "22060", "22070", "22510", "22520",
     "37050", "37030", "37070", "37100", "37560", "37570", "37580", "37590",
@@ -41,6 +46,31 @@ def set_korean_font():
     else:
         print("[경고] 한글 폰트 없음 — 라벨 깨질 수 있음")
     plt.rcParams["axes.unicode_minus"] = False
+
+
+def load_osm_roads(bbox_5179):
+    """OSM .pbf에서 주요 도로망(line)을 읽어 EPSG:5179 GeoDataFrame 반환.
+    pyrosm 필요. 없거나 실패하면 None 반환(도로 레이어 생략)."""
+    try:
+        from pyrosm import OSM
+    except ImportError:
+        print("[경고] pyrosm 미설치 → 도로망 생략. 설치: conda install -c conda-forge pyrosm")
+        return None
+    try:
+        osm = OSM(OSM_PBF)
+        roads = osm.get_network(network_type="driving")   # 차량 통행 도로
+        if roads is None or len(roads) == 0:
+            print("[경고] OSM 도로망이 비어 있음")
+            return None
+        roads = roads.to_crs("EPSG:5179")
+        # 지도 범위로 클립(렌더 속도)
+        from shapely.geometry import box
+        clip = gpd.GeoSeries([box(*bbox_5179)], crs="EPSG:5179")
+        roads = gpd.clip(roads, clip)
+        return roads
+    except Exception as e:
+        print(f"[경고] OSM 도로망 로드 실패: {e}")
+        return None
 
 
 def main():
@@ -149,6 +179,56 @@ def main():
 
     print(f"\n전체 1km 격자 {len(grid):,}개 중 인구>0(분석 사용) {len(used):,}개 "
           f"| 인구합 {int(used['TOT_POP'].sum()):,}")
+
+    # ── (5) 의사 수 비례 원(proportional symbol) 의료시설 지도 ──
+    fac_c = fac.copy()
+    fac_c["cx"] = fac_c.geometry.x; fac_c["cy"] = fac_c.geometry.y
+    dmax = float(fac_c["N_DOCTOR"].max())
+    # 원 면적 ∝ 의사수 (반지름 ∝ sqrt) — markersize는 면적 개념
+    fac_c["msize"] = 8 + (fac_c["N_DOCTOR"] / dmax) * 900
+    fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
+    others.plot(ax=ax, color="#f7f7f7", edgecolor="#dddddd", linewidth=0.4, zorder=0)
+    target.plot(ax=ax, color="#eef4f8", edgecolor="#2c2c2c", linewidth=1.2, zorder=1)
+    ax.scatter(fac_c["cx"], fac_c["cy"], s=fac_c["msize"], facecolor="#c0392b",
+               edgecolor="white", linewidth=0.3, alpha=0.55, zorder=3)
+    ax.set_xlim(gminx - gmx, gmaxx + gmx); ax.set_ylim(gminy - gmy, gmaxy + gmy)
+    ax.set_title(f"의료시설 및 총의사수 (시설 {len(fac_c):,}개)",
+                 fontsize=18, fontweight="bold", pad=8)
+    ax.set_axis_off()
+    # 범례: 대표 의사수 3개 원 크기
+    import math
+    legvals = sorted({int(round(v)) for v in
+                      [max(1, dmax * 0.1), dmax * 0.4, dmax] if v >= 1})
+    handles = [Line2D([0], [0], marker="o", color="none", markerfacecolor="#c0392b",
+                      alpha=0.55, markeredgecolor="white",
+                      markersize=math.sqrt(8 + (v / dmax) * 900),
+                      label=f"의사 {v}명") for v in legvals]
+    ax.legend(handles=handles, loc="lower left", fontsize=9, frameon=True,
+              title="총의사수", labelspacing=1.4, borderpad=1.0)
+    plt.tight_layout()
+    out5 = f"{OUT_DIR}/facilities_proportional_doctors.png"
+    plt.savefig(out5, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
+    print("저장:", out5)
+
+    # ── (6) 인구 단계구분도 + OSM 도로망 오버레이 ──
+    roads = load_osm_roads(tuple(np.array([gminx - gmx, gminy - gmy,
+                                           gmaxx + gmx, gmaxy + gmy])))
+    fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
+    base(ax)
+    used.plot(ax=ax, column="TOT_POP", cmap=cmap_pop, norm=norm_pop,
+              legend=True, edgecolor="none", linewidth=0, zorder=2,
+              legend_kwds={"label": "총인구수(명)", "shrink": 0.5})
+    if roads is not None:
+        roads.plot(ax=ax, color="#555555", linewidth=0.4, alpha=0.6, zorder=3)
+        rlabel = "OSM 도로망"
+    else:
+        rlabel = "(도로망 생략)"
+    ax.set_title(f"인구 분포 + OSM 도로망  [{rlabel}]",
+                 fontsize=18, fontweight="bold", pad=8)
+    plt.tight_layout()
+    out6 = f"{OUT_DIR}/population_grid_with_roads.png"
+    plt.savefig(out6, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
+    print("저장:", out6)
 
 
 if __name__ == "__main__":
