@@ -19,6 +19,8 @@ from matplotlib.lines import Line2D
 SIGUNGU_SHP = "data/BND_SIGUNGU_PG/BND_SIGUNGU_PG.shp"
 OUT_DIR = "data/study_area_maps"
 SUPPLY_GPKG = "data/g2sfca_timeseries/supply_ref.gpkg"   # compute가 만든 최종 공급 시설
+DEMAND_GPKG = "data/g2sfca_timeseries/demand_ref.gpkg"   # 분석 사용(인구>0) 격자
+GRID_SHP = "data/grid_1km_population_daegugyeongbuk/grid_1km_population_daegugyeongbuk.shp"
 TARGET_CODES = [
     "22010", "22020", "22030", "22040", "22050", "22060", "22070", "22510", "22520",
     "37050", "37030", "37070", "37100", "37560", "37570", "37580", "37590",
@@ -101,6 +103,52 @@ def main():
 
     # 참고 통계
     print(f"\n공급 시설 {len(fac):,}개 | 의사수 합 {int(fac['N_DOCTOR'].sum()):,}")
+
+    # ── (3),(4) 인구 격자 지도 2종 (경계 위에 격자) ──
+    grid = gpd.read_file(GRID_SHP).to_crs("EPSG:5179")
+    used = grid[grid["TOT_POP"] > 0].copy()        # 분석 사용 격자(인구>0)
+    gminx, gminy, gmaxx, gmaxy = target.total_bounds
+    gmx, gmy = (gmaxx - gminx) * 0.1, (gmaxy - gminy) * 0.1
+
+    def base(ax):
+        others.plot(ax=ax, color="#f7f7f7", edgecolor="#dddddd", linewidth=0.4, zorder=0)
+        target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.2, zorder=3)
+        ax.set_xlim(gminx - gmx, gmaxx + gmx); ax.set_ylim(gminy - gmy, gmaxy + gmy)
+        ax.set_axis_off()
+
+    # (3) 인구수 단계구분도 (분위 5단계; mapclassify 없이 numpy 분위로 경계 산정)
+    fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
+    base(ax)
+    qs = np.unique(np.nanpercentile(used["TOT_POP"].values, [0, 20, 40, 60, 80, 100]))
+    cmap_pop = plt.get_cmap("YlOrRd", len(qs) - 1)
+    norm_pop = matplotlib.colors.BoundaryNorm(qs, cmap_pop.N)
+    used.plot(ax=ax, column="TOT_POP", cmap=cmap_pop, norm=norm_pop,
+              legend=True, edgecolor="none", linewidth=0, zorder=2,
+              legend_kwds={"label": "총인구수(명)", "shrink": 0.5})
+    ax.set_title(f"1km 격자 인구 분포 (인구>0 격자 {len(used):,}개)",
+                 fontsize=18, fontweight="bold", pad=8)
+    plt.tight_layout()
+    out3 = f"{OUT_DIR}/population_grid_choropleth.png"
+    plt.savefig(out3, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
+    print("저장:", out3)
+
+    # (4) 분석 사용 격자만 (단색)
+    fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
+    base(ax)
+    used.plot(ax=ax, color="#4a7fb5", edgecolor="none", linewidth=0, zorder=2)
+    ax.set_title(f"분석 대상 격자 (인구>0, {len(used):,}개)",
+                 fontsize=18, fontweight="bold", pad=8)
+    from matplotlib.patches import Patch
+    ax.legend(handles=[Patch(facecolor="#4a7fb5", edgecolor="none",
+                             label=f"분석 대상 격자 ({len(used):,}개)")],
+              loc="lower left", fontsize=10, frameon=True)
+    plt.tight_layout()
+    out4 = f"{OUT_DIR}/population_grid_used.png"
+    plt.savefig(out4, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
+    print("저장:", out4)
+
+    print(f"\n전체 1km 격자 {len(grid):,}개 중 인구>0(분석 사용) {len(used):,}개 "
+          f"| 인구합 {int(used['TOT_POP'].sum()):,}")
 
 
 if __name__ == "__main__":
