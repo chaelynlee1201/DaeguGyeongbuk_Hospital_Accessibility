@@ -249,6 +249,19 @@ def main():
 
     # (지니계수 출력은 일단 제외 — gini/gini_ci/gini_diff_ci 함수는 보존, 필요시 재활성화)
 
+    # ── 상대 감소율 100% 격자: 상위5%(P05)>0 이지만 하위5%(P95)=0 → 나쁜 날 접근성 완전 소실 ──
+    print("\n[상대 감소율 100% 격자]  좋은 날엔 접근 가능하나 나쁜 날엔 접근성 0")
+    for period in PERIODS:
+        g = grids[period]
+        n_demand = len(g)
+        full = (g["p95"] > 0) & (g["p05"] == 0)        # p95=상위5%(P05), p05=하위5%(P95)
+        calc = g["dec_pct"].notna()                     # 감소율 산정 대상(상위5%>0)
+        n_full, n_calc = int(full.sum()), int(calc.sum())
+        pop_full = int(g.loc[full, "TOT_POP"].sum())
+        print(f"  {PERIODS[period]}: {n_full}개 격자 "
+              f"(전체 수요격자의 {n_full/n_demand*100:.1f}%, 감소율 산정격자의 {n_full/max(n_calc,1)*100:.1f}%) "
+              f"| 해당 격자 인구 {pop_full:,}명")
+
     # 요약
     for period in PERIODS:
         print(f"\n[{PERIODS[period]}] 격자 분위·감소율 요약 "
