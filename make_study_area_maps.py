@@ -5,7 +5,8 @@
  (3) 1km 인구 단계구분도 (분위 5단계)
  (4) 분석 사용 격자(인구>0) 단색
  (5) 의사수 비례 원(proportional symbol) 의료시설 지도
- (6) 분석 대상 격자(단색) + 대구·경북권 clip 도로망 (pyrosm 필요)
+ (6) 분석 대상 격자(노란색) + 대구·경북권 clip 도로망(파란색) (pyrosm 필요)
+ (7) 1km 인구 단계구분도 + 대구·경북권 clip 도로망(두꺼운 파란색)
 
 실행(서버):
   conda activate GTFS
@@ -209,23 +210,44 @@ def main():
     plt.savefig(out5, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
     print("저장:", out5)
 
-    # ── (6) 분석 포함 격자(단색) + 대구·경북권 clip 도로망 ──
+    # ── (6) 분석 포함 격자(노란색) + 대구·경북권 clip 도로망(파란색) ──
     roads = load_osm_roads(target.union_all())            # 대상 지역 경계로 clip
     fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
     base(ax)
+    used.plot(ax=ax, color="#f4c430", edgecolor="none", linewidth=0, alpha=0.9, zorder=1)
     if roads is not None:
-        roads.plot(ax=ax, color="#9aa0a6", linewidth=0.3, alpha=0.7, zorder=1)
-    used.plot(ax=ax, color="#4a7fb5", edgecolor="none", linewidth=0, alpha=0.85, zorder=2)
+        roads.plot(ax=ax, color="#1f6feb", linewidth=0.8, alpha=0.85, zorder=2)
     ax.set_title(f"분석 대상 격자 + 도로망 (격자 {len(used):,}개)",
                  fontsize=18, fontweight="bold", pad=8)
-    handles = [Patch(facecolor="#4a7fb5", edgecolor="none", label=f"분석 대상 격자 ({len(used):,}개)")]
+    handles = [Patch(facecolor="#f4c430", edgecolor="none", label=f"분석 대상 격자 ({len(used):,}개)")]
     if roads is not None:
-        handles.append(Line2D([0], [0], color="#9aa0a6", lw=1.2, label="도로망(OSM)"))
+        handles.append(Line2D([0], [0], color="#1f6feb", lw=2.0, label="도로망(OSM)"))
     ax.legend(handles=handles, loc="lower left", fontsize=10, frameon=True)
     plt.tight_layout()
     out6 = f"{OUT_DIR}/grid_with_roads.png"
     plt.savefig(out6, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
     print("저장:", out6)
+
+    # ── (7) 인구 단계구분도 + 대구·경북권 clip 도로망(두꺼운 파란색) ──
+    fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
+    base(ax)
+    used.plot(ax=ax, column="TOT_POP", cmap=cmap_pop, norm=norm_pop,
+              legend=True, edgecolor="none", linewidth=0, zorder=1,
+              legend_kwds={"label": "총인구수(명)", "shrink": 0.5})
+    if roads is not None:
+        roads.plot(ax=ax, color="#1f6feb", linewidth=1.0, alpha=0.8, zorder=2)
+        rlabel = "OSM 도로망"
+    else:
+        rlabel = "(도로망 생략)"
+    ax.set_title(f"1km 인구 분포 + 도로망  [{rlabel}]",
+                 fontsize=18, fontweight="bold", pad=8)
+    if roads is not None:
+        ax.legend(handles=[Line2D([0], [0], color="#1f6feb", lw=2.5, label="도로망(OSM)")],
+                  loc="lower left", fontsize=10, frameon=True)
+    plt.tight_layout()
+    out7 = f"{OUT_DIR}/population_grid_with_roads.png"
+    plt.savefig(out7, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
+    print("저장:", out7)
 
 
 if __name__ == "__main__":
