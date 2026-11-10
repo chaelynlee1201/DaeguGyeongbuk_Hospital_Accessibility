@@ -7,6 +7,7 @@
  (5) 의사수 비례 원(proportional symbol) 의료시설 지도
  (6) 분석 대상 격자(노란색) + 대구·경북권 clip 도로망(파란색) (pyrosm 필요)
  (7) 1km 인구 단계구분도 + 대구·경북권 clip 도로망(두꺼운 파란색)
+ (8) 베이스맵(경계 스타일) + 연한 인구 단계구분도 + 연한 회색 도로망, 대구 통합 라벨
 
 실행(서버):
   conda activate GTFS
@@ -80,19 +81,27 @@ def main():
     target = sig[sig["SIGUNGU_CD"].isin(TARGET_CODES)].copy()
     others = sig[~sig["SIGUNGU_CD"].isin(TARGET_CODES)].copy()
 
+    # 라벨용 그룹: 대구(코드 22*)는 하나로 합쳐 '대구광역시', 경북(37*)은 시·군 개별
+    def label_groups():
+        daegu = target[target["SIGUNGU_CD"].str.startswith("22")]
+        groups = [("대구광역시", daegu.union_all())]
+        for _, r in target[target["SIGUNGU_CD"].str.startswith("37")].iterrows():
+            groups.append((r["SIGUNGU_NM"], r.geometry))
+        return groups
+
     # ── (1) 연구 지역 경계 지도 ──
     fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
     minx, miny, maxx, maxy = target.total_bounds
     mx, my = (maxx - minx) * 0.12, (maxy - miny) * 0.12
     others.plot(ax=ax, color="#f2f2f2", edgecolor="#cccccc", linewidth=0.5, zorder=0)
     target.plot(ax=ax, color="#cfe3f2", edgecolor="#2c2c2c", linewidth=1.3, zorder=1)
-    for _, r in target.iterrows():
-        c = r.geometry.representative_point()
-        ax.annotate(r["SIGUNGU_NM"], xy=(c.x, c.y), ha="center", va="center",
+    for name, geom in label_groups():
+        c = geom.representative_point()
+        ax.annotate(name, xy=(c.x, c.y), ha="center", va="center",
                     fontsize=12, fontweight="bold", color="#1a1a1a", zorder=3,
                     path_effects=[pe.withStroke(linewidth=3, foreground="white")])
     ax.set_xlim(minx - mx, maxx + mx); ax.set_ylim(miny - my, maxy + my)
-    ax.set_title("연구 지역: 대구·경북 10개 시·군·구", fontsize=20, fontweight="bold", pad=8)
+    ax.set_title("연구 지역: 대구·경북", fontsize=20, fontweight="bold", pad=8)
     ax.set_axis_off()
     # 간이 스케일바(20km)
     sb = 20000; x0 = minx - mx + (maxx - minx) * 0.04; y0 = miny - my + (maxy - miny) * 0.04
@@ -256,6 +265,34 @@ def main():
     out7 = f"{OUT_DIR}/population_grid_with_roads.png"
     plt.savefig(out7, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
     print("저장:", out7)
+
+    # ── (8) study_area_boundary 스타일 베이스맵 + 연한 인구 단계구분도 + 연한 회색 도로망 ──
+    fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
+    others.plot(ax=ax, color="#f2f2f2", edgecolor="#cccccc", linewidth=0.5, zorder=0)
+    target.plot(ax=ax, color="#cfe3f2", edgecolor="#2c2c2c", linewidth=1.3, zorder=1)
+    # 연한 인구 단계구분도
+    used.plot(ax=ax, column="TOT_POP", cmap=cmap_pop, norm=norm_pop,
+              legend=True, edgecolor="none", linewidth=0, alpha=0.55, zorder=2,
+              legend_kwds={"label": "총인구수(명)", "shrink": 0.5})
+    # 연한 회색 clip 도로망(보통 두께)
+    if roads is not None:
+        roads.plot(ax=ax, color="#9aa0a6", linewidth=0.7, alpha=0.6, zorder=3)
+    # 대구 통합 라벨
+    for name, geom in label_groups():
+        c = geom.representative_point()
+        ax.annotate(name, xy=(c.x, c.y), ha="center", va="center",
+                    fontsize=12, fontweight="bold", color="#1a1a1a", zorder=5,
+                    path_effects=[pe.withStroke(linewidth=3, foreground="white")])
+    ax.set_xlim(minx - mx, maxx + mx); ax.set_ylim(miny - my, maxy + my)
+    # 스케일바(20km)
+    ax.plot([x0, x0 + sb], [y0, y0], color="black", lw=3, zorder=6)
+    ax.text(x0 + sb / 2, y0 + (maxy - miny) * 0.012, "20 km", ha="center", fontsize=10, zorder=6)
+    ax.set_title("연구 지역 · 인구 분포 · 도로망", fontsize=20, fontweight="bold", pad=8)
+    ax.set_axis_off()
+    plt.tight_layout()
+    out8 = f"{OUT_DIR}/study_area_population_roads.png"
+    plt.savefig(out8, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
+    print("저장:", out8)
 
 
 if __name__ == "__main__":
