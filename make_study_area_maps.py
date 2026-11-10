@@ -269,7 +269,7 @@ def main():
     # ── (8) study_area_boundary 스타일 베이스맵 + 연한 인구 단계구분도 + 연한 회색 도로망 ──
     fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
     others.plot(ax=ax, color="#f2f2f2", edgecolor="#cccccc", linewidth=0.5, zorder=0)
-    target.plot(ax=ax, color="#cfe3f2", edgecolor="#2c2c2c", linewidth=1.3, zorder=1)
+    target.plot(ax=ax, color="none", edgecolor="#2c2c2c", linewidth=1.3, zorder=1)
     # 연한 인구 단계구분도
     used.plot(ax=ax, column="TOT_POP", cmap=cmap_pop, norm=norm_pop,
               legend=True, edgecolor="none", linewidth=0, alpha=0.55, zorder=2,
