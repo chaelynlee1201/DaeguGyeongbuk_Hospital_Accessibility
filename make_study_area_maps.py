@@ -5,7 +5,7 @@
  (3) 1km 인구 단계구분도 (분위 5단계)
  (4) 분석 사용 격자(인구>0) 단색
  (5) 의사수 비례 원(proportional symbol) 의료시설 지도
- (6) 인구 단계구분도 + OSM 도로망 오버레이 (pyrosm 필요)
+ (6) 분석 대상 격자(단색) + 대구·경북권 clip 도로망 (pyrosm 필요)
 
 실행(서버):
   conda activate GTFS
@@ -19,6 +19,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 SIGUNGU_SHP = "data/BND_SIGUNGU_PG/BND_SIGUNGU_PG.shp"
 OUT_DIR = "data/study_area_maps"
@@ -48,9 +49,9 @@ def set_korean_font():
     plt.rcParams["axes.unicode_minus"] = False
 
 
-def load_osm_roads(bbox_5179):
-    """OSM .pbf에서 주요 도로망(line)을 읽어 EPSG:5179 GeoDataFrame 반환.
-    pyrosm 필요. 없거나 실패하면 None 반환(도로 레이어 생략)."""
+def load_osm_roads(clip_geom_5179):
+    """OSM .pbf에서 도로망(line)을 읽어 대상 지역(clip_geom_5179)으로 clip한
+    EPSG:5179 GeoDataFrame 반환. pyrosm 필요. 없거나 실패하면 None."""
     try:
         from pyrosm import OSM
     except ImportError:
@@ -63,10 +64,9 @@ def load_osm_roads(bbox_5179):
             print("[경고] OSM 도로망이 비어 있음")
             return None
         roads = roads.to_crs("EPSG:5179")
-        # 지도 범위로 클립(렌더 속도)
-        from shapely.geometry import box
-        clip = gpd.GeoSeries([box(*bbox_5179)], crs="EPSG:5179")
-        roads = gpd.clip(roads, clip)
+        clip = gpd.GeoSeries([clip_geom_5179], crs="EPSG:5179")
+        roads = gpd.clip(roads, clip)                     # 대구·경북권 경계로 clip
+        print(f"OSM 도로망: {len(roads):,}개 (대상 지역 clip 후)")
         return roads
     except Exception as e:
         print(f"[경고] OSM 도로망 로드 실패: {e}")
@@ -168,7 +168,6 @@ def main():
     used.plot(ax=ax, color="#4a7fb5", edgecolor="none", linewidth=0, zorder=2)
     ax.set_title(f"분석 대상 격자 (인구>0, {len(used):,}개)",
                  fontsize=18, fontweight="bold", pad=8)
-    from matplotlib.patches import Patch
     ax.legend(handles=[Patch(facecolor="#4a7fb5", edgecolor="none",
                              label=f"분석 대상 격자 ({len(used):,}개)")],
               loc="lower left", fontsize=10, frameon=True)
@@ -210,23 +209,21 @@ def main():
     plt.savefig(out5, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
     print("저장:", out5)
 
-    # ── (6) 인구 단계구분도 + OSM 도로망 오버레이 ──
-    roads = load_osm_roads(tuple(np.array([gminx - gmx, gminy - gmy,
-                                           gmaxx + gmx, gmaxy + gmy])))
+    # ── (6) 분석 포함 격자(단색) + 대구·경북권 clip 도로망 ──
+    roads = load_osm_roads(target.union_all())            # 대상 지역 경계로 clip
     fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
     base(ax)
-    used.plot(ax=ax, column="TOT_POP", cmap=cmap_pop, norm=norm_pop,
-              legend=True, edgecolor="none", linewidth=0, zorder=2,
-              legend_kwds={"label": "총인구수(명)", "shrink": 0.5})
     if roads is not None:
-        roads.plot(ax=ax, color="#555555", linewidth=0.4, alpha=0.6, zorder=3)
-        rlabel = "OSM 도로망"
-    else:
-        rlabel = "(도로망 생략)"
-    ax.set_title(f"인구 분포 + OSM 도로망  [{rlabel}]",
+        roads.plot(ax=ax, color="#9aa0a6", linewidth=0.3, alpha=0.7, zorder=1)
+    used.plot(ax=ax, color="#4a7fb5", edgecolor="none", linewidth=0, alpha=0.85, zorder=2)
+    ax.set_title(f"분석 대상 격자 + 도로망 (격자 {len(used):,}개)",
                  fontsize=18, fontweight="bold", pad=8)
+    handles = [Patch(facecolor="#4a7fb5", edgecolor="none", label=f"분석 대상 격자 ({len(used):,}개)")]
+    if roads is not None:
+        handles.append(Line2D([0], [0], color="#9aa0a6", lw=1.2, label="도로망(OSM)"))
+    ax.legend(handles=handles, loc="lower left", fontsize=10, frameon=True)
     plt.tight_layout()
-    out6 = f"{OUT_DIR}/population_grid_with_roads.png"
+    out6 = f"{OUT_DIR}/grid_with_roads.png"
     plt.savefig(out6, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
     print("저장:", out6)
 
