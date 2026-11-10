@@ -14,7 +14,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
-from matplotlib.patches import Patch
 from matplotlib.lines import Line2D
 
 SIGUNGU_SHP = "data/BND_SIGUNGU_PG/BND_SIGUNGU_PG.shp"
@@ -82,15 +81,8 @@ def main():
                                                linestyle="--", zorder=1)
     target.plot(ax=ax, color="#eef4f8", edgecolor="#2c2c2c", linewidth=1.2, zorder=2)
 
-    # 시설 유형별 색상 (FAC_TYPE 값에 맞춰 자동)
-    types = list(fac["FAC_TYPE"].value_counts().index) if "FAC_TYPE" in fac.columns else []
-    cmap = plt.get_cmap("tab10")
-    for i, t in enumerate(types):
-        sub = fac[fac["FAC_TYPE"] == t]
-        sub.plot(ax=ax, color=cmap(i % 10), markersize=6, alpha=0.75,
-                 label=f"{t} ({len(sub)})", zorder=3)
-    if not types:   # FAC_TYPE 없으면 단색
-        fac.plot(ax=ax, color="#c0392b", markersize=6, alpha=0.7, zorder=3)
+    # 종별 구분 없이 단색 점으로 표시
+    fac.plot(ax=ax, color="#c0392b", markersize=6, alpha=0.7, zorder=3)
 
     bminx, bminy, bmaxx, bmaxy = buf.bounds
     bx, by = (bmaxx - bminx) * 0.05, (bmaxy - bminy) * 0.05
@@ -98,9 +90,10 @@ def main():
     ax.set_title(f"의료시설 분포 (7종·총의사수>0, 20km 버퍼 내 {len(fac):,}개)",
                  fontsize=18, fontweight="bold", pad=8)
     ax.set_axis_off()
-    handles = ax.get_legend_handles_labels()[0]
-    handles.append(Line2D([0], [0], color="#e07b39", lw=1.2, ls="--", label="20km 버퍼"))
-    ax.legend(handles=handles, loc="lower left", fontsize=9, frameon=True, title="시설 종별(개수)")
+    handles = [Line2D([0], [0], marker="o", color="none", markerfacecolor="#c0392b",
+                      markersize=7, alpha=0.8, label=f"의료시설 ({len(fac):,}개)"),
+               Line2D([0], [0], color="#e07b39", lw=1.2, ls="--", label="20km 버퍼")]
+    ax.legend(handles=handles, loc="lower left", fontsize=10, frameon=True)
     plt.tight_layout()
     out2 = f"{OUT_DIR}/medical_facilities_supply.png"
     plt.savefig(out2, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
@@ -108,8 +101,6 @@ def main():
 
     # 참고 통계
     print(f"\n공급 시설 {len(fac):,}개 | 의사수 합 {int(fac['N_DOCTOR'].sum()):,}")
-    if "FAC_TYPE" in fac.columns:
-        print(fac["FAC_TYPE"].value_counts().to_string())
 
 
 if __name__ == "__main__":
