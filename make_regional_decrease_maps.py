@@ -114,13 +114,15 @@ def main():
         cmap = plt.get_cmap(CMAP, N_CLASSES)
         norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
 
-        # 레이아웃: 좌(메인 지도) | 우(삽도 + 공통 범례) — 삽도가 메인을 가리지 않음
+        # 레이아웃: 좌(메인 지도) | 우(여백/삽도/범례) — 삽도가 메인을 가리지 않고 아래쪽에 배치
         fig = plt.figure(figsize=(17, 11), facecolor="white")
-        gs = fig.add_gridspec(2, 2, width_ratios=[1.7, 1], height_ratios=[1.2, 1],
-                              wspace=0.02, hspace=0.12)
-        ax = fig.add_subplot(gs[:, 0])       # 메인(좌, 2행 차지)
-        ax_in = fig.add_subplot(gs[0, 1])    # 삽도(우상)
-        ax_cb = fig.add_subplot(gs[1, 1])    # 범례(우하)
+        gs = fig.add_gridspec(3, 2, width_ratios=[1.7, 1],
+                              height_ratios=[0.5, 1.1, 0.6],
+                              wspace=0.02, hspace=0.10)
+        ax = fig.add_subplot(gs[:, 0])       # 메인(좌, 전체 행)
+        ax_in = fig.add_subplot(gs[1, 1])    # 삽도(우, 가운데 행 → 아래로 내림)
+        ax_cb = fig.add_subplot(gs[2, 1])    # 범례(우, 하단 행)
+        fig.add_subplot(gs[0, 1]).set_axis_off()   # 우상단 여백(삽도 위 공간 확보)
 
         # 메인 지도
         mr.plot(ax=ax, column="val", cmap=cmap, norm=norm, edgecolor="#2c2c2c",
@@ -128,15 +130,13 @@ def main():
         for _, r in mr.iterrows():
             c = r.geometry.representative_point()
             lab = r["SIGUNGU_NM"] + (f"\n{r['val']:.0f}%" if pd.notna(r["val"]) else "")
-            ax.annotate(lab, xy=(c.x, c.y), ha="center", va="center", fontsize=10,
+            ax.annotate(lab, xy=(c.x, c.y), ha="center", va="center", fontsize=15,
                         fontweight="bold", color="#1a1a1a",
-                        path_effects=[pe.withStroke(linewidth=2.5, foreground="white")])
+                        path_effects=[pe.withStroke(linewidth=3, foreground="white")])
         # 메인에 대구 확대영역 사각형 표시(참고 이미지처럼)
         dminx, dminy, dmaxx, dmaxy = daegu_geom.bounds
         ax.add_patch(Rectangle((dminx, dminy), dmaxx - dminx, dmaxy - dminy,
-                               fill=False, edgecolor="#e03030", linewidth=1.8, zorder=5))
-        ax.set_title(f"지역별 접근성 상대 감소율 평균 — {PERIODS[period]}",
-                     fontsize=18, fontweight="bold", pad=8)
+                               fill=False, edgecolor="#e03030", linewidth=3.5, zorder=5))
         ax.set_axis_off()
 
         # 삽도(우상): 대구 자치구 (동일 norm·cmap)
@@ -150,7 +150,7 @@ def main():
                            fontweight="bold", color="#1a1a1a",
                            path_effects=[pe.withStroke(linewidth=1.8, foreground="white")])
         for s in ax_in.spines.values():
-            s.set_edgecolor("#e03030"); s.set_linewidth(1.8)
+            s.set_edgecolor("#e03030"); s.set_linewidth(3.5)
         ax_in.set_title("대구광역시 (자치구)", fontsize=12, fontweight="bold")
         ax_in.set_xticks([]); ax_in.set_yticks([])
 
