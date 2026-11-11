@@ -116,9 +116,9 @@ def main():
 
         # 레이아웃: 좌(메인 지도) | 우(여백/삽도/범례) — 삽도가 메인을 가리지 않고 아래쪽에 배치
         fig = plt.figure(figsize=(17, 11), facecolor="white")
-        gs = fig.add_gridspec(3, 2, width_ratios=[1.7, 1],
-                              height_ratios=[0.5, 1.1, 0.6],
-                              wspace=0.02, hspace=0.10)
+        gs = fig.add_gridspec(3, 2, width_ratios=[1.55, 1],
+                              height_ratios=[0.35, 1.3, 0.5],
+                              wspace=-0.02, hspace=0.06)
         ax = fig.add_subplot(gs[:, 0])       # 메인(좌, 전체 행)
         ax_in = fig.add_subplot(gs[1, 1])    # 삽도(우, 가운데 행 → 아래로 내림)
         ax_cb = fig.add_subplot(gs[2, 1])    # 범례(우, 하단 행)
@@ -151,7 +151,6 @@ def main():
                            path_effects=[pe.withStroke(linewidth=1.8, foreground="white")])
         for s in ax_in.spines.values():
             s.set_edgecolor("#e03030"); s.set_linewidth(3.5)
-        ax_in.set_title("대구광역시 (자치구)", fontsize=12, fontweight="bold")
         ax_in.set_xticks([]); ax_in.set_yticks([])
 
         # 공통 범례(우하): 등간격 색 구간
@@ -161,6 +160,27 @@ def main():
                           aspect=18, pad=0.05)
         cb.set_label("상대 감소율 평균 (%)", fontsize=11)
         cb.set_ticks(bounds); cb.set_ticklabels([f"{b:.0f}" for b in bounds])
+
+        # ── 삽도의 대구 크기 = 메인의 대구 크기 (동일 축척 m/inch) ──
+        fig.canvas.draw()
+        fig_w_in, fig_h_in = fig.get_size_inches()
+        mpos = ax.get_position()
+        mx0, mx1 = ax.get_xlim(); my0, my1 = ax.get_ylim()
+        # 메인은 aspect=equal → x·y 동일 축척. 바인딩 차원으로 m/inch 산정
+        s_main = max((mx1 - mx0) / (mpos.width * fig_w_in),
+                     (my1 - my0) / (mpos.height * fig_h_in))
+        pad = 0.08
+        dw = (dmaxx - dminx) * (1 + 2 * pad); dh = (dmaxy - dminy) * (1 + 2 * pad)
+        ax_in.set_xlim(dminx - (dmaxx - dminx) * pad, dmaxx + (dmaxx - dminx) * pad)
+        ax_in.set_ylim(dminy - (dmaxy - dminy) * pad, dmaxy + (dmaxy - dminy) * pad)
+        ax_in.set_aspect("auto")   # 박스 크기로 축척을 직접 제어
+        w_in = dw / s_main; h_in = dh / s_main
+        ipos = ax_in.get_position()
+        # 우측 컬럼 영역 안에서, 셀 좌상단 기준으로 배치(메인을 가리지 않음)
+        left = ipos.x0
+        top = ipos.y0 + ipos.height
+        ax_in.set_position([left, top - h_in / fig_h_in,
+                            w_in / fig_w_in, h_in / fig_h_in])
 
         out = f"{OUT_DIR}/regional_decrease_{period}.png"
         plt.savefig(out, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
