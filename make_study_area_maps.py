@@ -245,7 +245,7 @@ def main():
     fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
     # 회색 배경 없이 경계 바운더리만
     target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.2, zorder=3)
-    excluded.plot(ax=ax, color="#d9d9d9", edgecolor="none", linewidth=0, zorder=1)
+    excluded.plot(ax=ax, color="#c8c8c8", edgecolor="none", linewidth=0, zorder=1)
     used.plot(ax=ax, color="white", edgecolor="none", linewidth=0, zorder=2)
     if roads is not None:
         roads.plot(ax=ax, color=ROAD_BLUE, linewidth=1.0, alpha=0.95, zorder=4)
@@ -258,7 +258,7 @@ def main():
     ax.set_xlim(gminx - gmx, gmaxx + gmx); ax.set_ylim(gminy - gmy, gmaxy + gmy)
     ax.set_axis_off()
     handles = [Patch(facecolor="white", edgecolor="#999999", label=f"분석 대상 격자 ({len(used):,}개)"),
-               Patch(facecolor="#d9d9d9", edgecolor="none", label=f"분석 제외 격자 (인구 0, {len(excluded):,}개)")]
+               Patch(facecolor="#c8c8c8", edgecolor="none", label=f"분석 제외 격자 (인구 0, {len(excluded):,}개)")]
     if roads is not None:
         handles.append(Line2D([0], [0], color=ROAD_BLUE, lw=2.0, label="도로망(OSM)"))
     ax.legend(handles=handles, loc="lower left", fontsize=13, frameon=True,
