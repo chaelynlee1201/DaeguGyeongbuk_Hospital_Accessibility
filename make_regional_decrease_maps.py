@@ -121,6 +121,7 @@ def main():
         ax = fig.add_subplot(gs[0, 0])       # 메인(좌)
         ax_in = fig.add_subplot(gs[0, 1])    # 삽도(가운데)
         ax_cb = fig.add_subplot(gs[0, 2])    # 세로 범례(우)
+        fig.subplots_adjust(left=0.005, right=0.995, top=0.995, bottom=0.005)
 
         # 메인 지도
         mr.plot(ax=ax, column="val", cmap=cmap, norm=norm, edgecolor="#2c2c2c",
@@ -182,7 +183,8 @@ def main():
         ax_in.set_position([left, cy - hf / 2, wf, hf])
 
         out = f"{OUT_DIR}/regional_decrease_{period}.png"
-        plt.savefig(out, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
+        plt.savefig(out, dpi=200, facecolor="white", bbox_inches="tight", pad_inches=0.02)
+        plt.close(fig)
         print("저장:", out)
         print(f"  [{period}] 지역 평균(%): " +
               ", ".join(f"{n}={v:.0f}" for n, v in zip(mr['SIGUNGU_NM'], mr['val']) if pd.notna(v)))
