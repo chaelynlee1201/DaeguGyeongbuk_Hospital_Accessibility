@@ -160,7 +160,8 @@ def main():
 
     # ── (3),(4) 인구 격자 지도 2종 (경계 위에 격자) ──
     grid = gpd.read_file(GRID_SHP).to_crs("EPSG:5179")
-    used = grid[grid["TOT_POP"] > 0].copy()        # 분석 사용 격자(인구>0)
+    used = grid[grid["TOT_POP"] > 0].copy()          # 분석 사용 격자(인구>0)
+    excluded = grid[~(grid["TOT_POP"] > 0)].copy()   # 분석 제외 격자(인구 0)
     gminx, gminy, gmaxx, gmaxy = target.total_bounds
     gmx, gmy = (gmaxx - gminx) * 0.1, (gmaxy - gminy) * 0.1
 
@@ -233,19 +234,30 @@ def main():
     plt.savefig(out5, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
     print("저장:", out5)
 
-    # ── (6) 분석 포함 격자(노란색) + 대구·경북권 clip 도로망(파란색) ──
+    # ── (6) 분석 포함 격자(노랑) + 제외 격자(회색) + 도로망(참고 지도 파란색) ──
+    ROAD_BLUE = "#6baed6"     # 참고 지도(그림1)의 버스 노선 파란색 계열
     roads = load_osm_roads(target.union_all())            # 대상 지역 경계로 clip
     fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
-    base(ax)
-    used.plot(ax=ax, color="#f4c430", edgecolor="none", linewidth=0, alpha=0.9, zorder=1)
+    # 회색 배경 없이 경계 바운더리만
+    target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.2, zorder=3)
+    excluded.plot(ax=ax, color="#d9d9d9", edgecolor="none", linewidth=0, zorder=1)
+    used.plot(ax=ax, color="#f4c430", edgecolor="none", linewidth=0, alpha=0.95, zorder=2)
     if roads is not None:
-        roads.plot(ax=ax, color="#1f6feb", linewidth=0.8, alpha=0.85, zorder=2)
-    ax.set_title(f"분석 대상 격자 + 도로망 (격자 {len(used):,}개)",
-                 fontsize=18, fontweight="bold", pad=8)
-    handles = [Patch(facecolor="#f4c430", edgecolor="none", label=f"분석 대상 격자 ({len(used):,}개)")]
+        roads.plot(ax=ax, color=ROAD_BLUE, linewidth=0.8, alpha=0.9, zorder=4)
+    # study_area_boundary와 동일 라벨(대구 통합)
+    for name, geom in label_groups():
+        c = geom.representative_point()
+        ax.annotate(name, xy=(c.x, c.y), ha="center", va="center",
+                    fontsize=12, fontweight="bold", color="#1a1a1a", zorder=6,
+                    path_effects=[pe.withStroke(linewidth=3, foreground="white")])
+    ax.set_xlim(gminx - gmx, gmaxx + gmx); ax.set_ylim(gminy - gmy, gmaxy + gmy)
+    ax.set_axis_off()
+    handles = [Patch(facecolor="#f4c430", edgecolor="none", label=f"분석 대상 격자 ({len(used):,}개)"),
+               Patch(facecolor="#d9d9d9", edgecolor="none", label=f"분석 제외 격자 (인구 0, {len(excluded):,}개)")]
     if roads is not None:
-        handles.append(Line2D([0], [0], color="#1f6feb", lw=2.0, label="도로망(OSM)"))
-    ax.legend(handles=handles, loc="lower left", fontsize=10, frameon=True)
+        handles.append(Line2D([0], [0], color=ROAD_BLUE, lw=2.0, label="도로망(OSM)"))
+    ax.legend(handles=handles, loc="lower left", fontsize=13, frameon=True,
+              labelspacing=1.2, borderpad=1.0)
     plt.tight_layout()
     out6 = f"{OUT_DIR}/grid_with_roads.png"
     plt.savefig(out6, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
