@@ -257,10 +257,7 @@ def main():
                     path_effects=[pe.withStroke(linewidth=3, foreground="white")])
     ax.set_xlim(gminx - gmx, gmaxx + gmx); ax.set_ylim(gminy - gmy, gmaxy + gmy)
     ax.set_axis_off()
-    handles = [Patch(facecolor="white", edgecolor="#999999", label=f"분석 대상 격자 ({len(used):,}개)"),
-               Patch(facecolor="#c8c8c8", edgecolor="none", label=f"분석 제외 격자 (인구 0, {len(excluded):,}개)")]
-    if roads is not None:
-        handles.append(Line2D([0], [0], color=ROAD_BLUE, lw=2.0, label="도로망(OSM)"))
+    handles = [Patch(facecolor="#c8c8c8", edgecolor="none", label="분석 제외 격자")]
     ax.legend(handles=handles, loc="lower left", fontsize=13, frameon=True,
               labelspacing=1.2, borderpad=1.0)
     plt.tight_layout()
