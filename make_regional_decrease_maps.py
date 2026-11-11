@@ -114,15 +114,13 @@ def main():
         cmap = plt.get_cmap(CMAP, N_CLASSES)
         norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
 
-        # 레이아웃: 좌(메인 지도) | 우(여백/삽도/범례) — 삽도가 메인을 가리지 않고 아래쪽에 배치
+        # 레이아웃: 좌(메인 지도) | 우(삽도 + 세로 범례) — 삽도가 메인을 가리지 않게
         fig = plt.figure(figsize=(17, 11), facecolor="white")
-        gs = fig.add_gridspec(3, 2, width_ratios=[1.55, 1],
-                              height_ratios=[0.35, 1.3, 0.5],
-                              wspace=-0.02, hspace=0.06)
-        ax = fig.add_subplot(gs[:, 0])       # 메인(좌, 전체 행)
-        ax_in = fig.add_subplot(gs[1, 1])    # 삽도(우, 가운데 행 → 아래로 내림)
-        ax_cb = fig.add_subplot(gs[2, 1])    # 범례(우, 하단 행)
-        fig.add_subplot(gs[0, 1]).set_axis_off()   # 우상단 여백(삽도 위 공간 확보)
+        gs = fig.add_gridspec(1, 3, width_ratios=[1.7, 1.05, 0.18],
+                              wspace=0.0)
+        ax = fig.add_subplot(gs[0, 0])       # 메인(좌)
+        ax_in = fig.add_subplot(gs[0, 1])    # 삽도(가운데)
+        ax_cb = fig.add_subplot(gs[0, 2])    # 세로 범례(우)
 
         # 메인 지도
         mr.plot(ax=ax, column="val", cmap=cmap, norm=norm, edgecolor="#2c2c2c",
@@ -153,35 +151,35 @@ def main():
             s.set_edgecolor("#e03030"); s.set_linewidth(3.5)
         ax_in.set_xticks([]); ax_in.set_yticks([])
 
-        # 공통 범례(우하): 등간격 색 구간
+        # 공통 범례(우): 세로 등간격 색 구간
         ax_cb.set_axis_off()
         sm = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap); sm.set_array([])
-        cb = fig.colorbar(sm, ax=ax_cb, orientation="horizontal", fraction=0.5,
-                          aspect=18, pad=0.05)
-        cb.set_label("상대 감소율 평균 (%)", fontsize=11)
+        cb = fig.colorbar(sm, ax=ax_cb, orientation="vertical", fraction=0.5,
+                          aspect=16, pad=0.05)
+        cb.set_label("상대 감소율 평균 (%)", fontsize=12)
         cb.set_ticks(bounds); cb.set_ticklabels([f"{b:.0f}" for b in bounds])
 
-        # ── 삽도의 대구 크기 = 메인의 대구 크기 (동일 축척 m/inch) ──
+        # ── 삽도 축척 = 메인의 대구 축척 × 확대배율 ──
+        INSET_ZOOM = 1.3     # 메인 대구 대비 삽도 확대배율
         fig.canvas.draw()
         fig_w_in, fig_h_in = fig.get_size_inches()
         mpos = ax.get_position()
         mx0, mx1 = ax.get_xlim(); my0, my1 = ax.get_ylim()
-        # 메인은 aspect=equal → x·y 동일 축척. 바인딩 차원으로 m/inch 산정
         s_main = max((mx1 - mx0) / (mpos.width * fig_w_in),
                      (my1 - my0) / (mpos.height * fig_h_in))
-        pad = 0.08
+        s_in = s_main / INSET_ZOOM        # 축척을 작게 → 대구가 크게 그려짐
+        pad = 0.06
         dw = (dmaxx - dminx) * (1 + 2 * pad); dh = (dmaxy - dminy) * (1 + 2 * pad)
         ax_in.set_xlim(dminx - (dmaxx - dminx) * pad, dmaxx + (dmaxx - dminx) * pad)
         ax_in.set_ylim(dminy - (dmaxy - dminy) * pad, dmaxy + (dmaxy - dminy) * pad)
-        ax_in.set_aspect("auto")   # 박스 크기로 축척을 직접 제어
-        w_in = dw / s_main; h_in = dh / s_main
-        ipos = ax_in.get_position()
-        top = ipos.y0 + ipos.height
-        # 범례(컬러바)의 가로 중심에 삽도를 정렬
-        cb_pos = cb.ax.get_position()
-        center_x = cb_pos.x0 + cb_pos.width / 2
+        ax_in.set_aspect("auto")
+        w_in = dw / s_in; h_in = dh / s_in
         wf = w_in / fig_w_in; hf = h_in / fig_h_in
-        ax_in.set_position([center_x - wf / 2, top - hf, wf, hf])
+        # 메인 바로 옆(간격 최소)에 세로 중앙 배치
+        ipos = ax_in.get_position()
+        left = mpos.x0 + mpos.width + 0.005          # 메인 우측 경계 바로 옆
+        cy = mpos.y0 + mpos.height / 2               # 메인 세로 중심
+        ax_in.set_position([left, cy - hf / 2, wf, hf])
 
         out = f"{OUT_DIR}/regional_decrease_{period}.png"
         plt.savefig(out, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
