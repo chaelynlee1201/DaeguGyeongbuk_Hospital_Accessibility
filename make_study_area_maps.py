@@ -117,11 +117,11 @@ def main():
     buf = target.union_all().buffer(BUFFER_KM * 1000)
 
     fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
-    others.plot(ax=ax, color="#f7f7f7", edgecolor="#dddddd", linewidth=0.4, zorder=0)
+    # 배경(회색) 없이 경계 바운더리만
     gpd.GeoSeries([buf], crs="EPSG:5179").plot(ax=ax, color="none",
                                                edgecolor="#e07b39", linewidth=1.2,
                                                linestyle="--", zorder=1)
-    target.plot(ax=ax, color="#eef4f8", edgecolor="#2c2c2c", linewidth=1.2, zorder=2)
+    target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.3, zorder=2)
 
     # 원 크기 ∝ 총의사수 (면적 비례: markersize ∝ 의사수)
     import math
@@ -130,20 +130,26 @@ def main():
     ax.scatter(fac.geometry.x, fac.geometry.y, s=msize, facecolor="#c0392b",
                edgecolor="white", linewidth=0.3, alpha=0.55, zorder=3)
 
+    # study_area_boundary와 동일 라벨(대구 통합 + 경북 시·군)
+    for name, geom in label_groups():
+        c = geom.representative_point()
+        ax.annotate(name, xy=(c.x, c.y), ha="center", va="center",
+                    fontsize=12, fontweight="bold", color="#1a1a1a", zorder=4,
+                    path_effects=[pe.withStroke(linewidth=3, foreground="white")])
+
     bminx, bminy, bmaxx, bmaxy = buf.bounds
     bx, by = (bmaxx - bminx) * 0.05, (bmaxy - bminy) * 0.05
     ax.set_xlim(bminx - bx, bmaxx + bx); ax.set_ylim(bminy - by, bmaxy + by)
-    ax.set_title(f"의료시설 및 총의사수 (7종·총의사수>0, 20km 버퍼 내 {len(fac):,}개)",
-                 fontsize=18, fontweight="bold", pad=8)
     ax.set_axis_off()
     legvals = sorted({int(round(v)) for v in [max(1, dmax * 0.1), dmax * 0.4, dmax] if v >= 1})
     handles = [Line2D([0], [0], marker="o", color="none", markerfacecolor="#c0392b",
                       alpha=0.55, markeredgecolor="white",
                       markersize=math.sqrt(8 + (v / dmax) * 900), label=f"의사 {v}명")
                for v in legvals]
-    handles.append(Line2D([0], [0], color="#e07b39", lw=1.2, ls="--", label="20km 버퍼"))
-    ax.legend(handles=handles, loc="lower left", fontsize=9, frameon=True,
-              title="총의사수", labelspacing=1.4, borderpad=1.0)
+    handles.append(Line2D([0], [0], color="#e07b39", lw=2.0, ls="--", label="20km 버퍼"))
+    ax.legend(handles=handles, loc="lower left", fontsize=15, frameon=True,
+              title="총의사수", title_fontsize=16, labelspacing=2.0, borderpad=1.2,
+              handletextpad=1.5)
     plt.tight_layout()
     out2 = f"{OUT_DIR}/medical_facilities_supply.png"
     plt.savefig(out2, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
