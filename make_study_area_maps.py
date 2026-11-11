@@ -117,11 +117,11 @@ def main():
     buf = target.union_all().buffer(BUFFER_KM * 1000)
 
     fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
-    # 배경(회색) 없이 경계 바운더리만
+    # 배경(회색) 없이, 대상 지역만 연한 파란색으로 채우고 경계선 표시
     gpd.GeoSeries([buf], crs="EPSG:5179").plot(ax=ax, color="none",
                                                edgecolor="#e07b39", linewidth=1.2,
                                                linestyle="--", zorder=1)
-    target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.3, zorder=2)
+    target.plot(ax=ax, color="#dbeafe", edgecolor="#2c2c2c", linewidth=1.3, zorder=2)
 
     # 원 크기 ∝ 총의사수 (면적 비례: markersize ∝ 의사수)
     import math
