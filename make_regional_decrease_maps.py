@@ -25,7 +25,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+from matplotlib.patches import Rectangle
 
 GRID_SHP = "data/grid_1km_population_daegugyeongbuk/grid_1km_population_daegugyeongbuk.shp"
 SIGUNGU_SHP = "data/BND_SIGUNGU_PG/BND_SIGUNGU_PG.shp"
@@ -114,37 +114,54 @@ def main():
         cmap = plt.get_cmap(CMAP, N_CLASSES)
         norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
 
-        fig, ax = plt.subplots(figsize=(12, 12), facecolor="white")
+        # 레이아웃: 좌(메인 지도) | 우(삽도 + 공통 범례) — 삽도가 메인을 가리지 않음
+        fig = plt.figure(figsize=(17, 11), facecolor="white")
+        gs = fig.add_gridspec(2, 2, width_ratios=[1.7, 1], height_ratios=[1.2, 1],
+                              wspace=0.02, hspace=0.12)
+        ax = fig.add_subplot(gs[:, 0])       # 메인(좌, 2행 차지)
+        ax_in = fig.add_subplot(gs[0, 1])    # 삽도(우상)
+        ax_cb = fig.add_subplot(gs[1, 1])    # 범례(우하)
+
+        # 메인 지도
         mr.plot(ax=ax, column="val", cmap=cmap, norm=norm, edgecolor="#2c2c2c",
-                linewidth=1.2, legend=True,
-                legend_kwds={"label": "상대 감소율 평균 (%)", "shrink": 0.5},
-                missing_kwds={"color": "#eeeeee", "label": "값 없음"})
+                linewidth=1.2, legend=False, missing_kwds={"color": "#eeeeee"})
         for _, r in mr.iterrows():
             c = r.geometry.representative_point()
             lab = r["SIGUNGU_NM"] + (f"\n{r['val']:.0f}%" if pd.notna(r["val"]) else "")
             ax.annotate(lab, xy=(c.x, c.y), ha="center", va="center", fontsize=10,
                         fontweight="bold", color="#1a1a1a",
                         path_effects=[pe.withStroke(linewidth=2.5, foreground="white")])
+        # 메인에 대구 확대영역 사각형 표시(참고 이미지처럼)
+        dminx, dminy, dmaxx, dmaxy = daegu_geom.bounds
+        ax.add_patch(Rectangle((dminx, dminy), dmaxx - dminx, dmaxy - dminy,
+                               fill=False, edgecolor="#e03030", linewidth=1.8, zorder=5))
         ax.set_title(f"지역별 접근성 상대 감소율 평균 — {PERIODS[period]}",
                      fontsize=18, fontweight="bold", pad=8)
         ax.set_axis_off()
 
-        # 삽도: 대구광역시 구 단위 (동일 norm·cmap)
-        axins = inset_axes(ax, width="38%", height="38%", loc="upper right", borderpad=1.2)
-        dd.plot(ax=axins, column="val", cmap=cmap, norm=norm, edgecolor="#2c2c2c",
-                linewidth=0.8, legend=False,
-                missing_kwds={"color": "#eeeeee"})
+        # 삽도(우상): 대구 자치구 (동일 norm·cmap)
+        dd.plot(ax=ax_in, column="val", cmap=cmap, norm=norm, edgecolor="#2c2c2c",
+                linewidth=0.8, legend=False, missing_kwds={"color": "#eeeeee"})
         for _, r in dd.iterrows():
             c = r.geometry.representative_point()
             lab = r["SIGUNGU_NM"].replace("군위군", "군위").replace("달성군", "달성") \
                   + (f"\n{r['val']:.0f}%" if pd.notna(r["val"]) else "")
-            axins.annotate(lab, xy=(c.x, c.y), ha="center", va="center", fontsize=7,
+            ax_in.annotate(lab, xy=(c.x, c.y), ha="center", va="center", fontsize=7.5,
                            fontweight="bold", color="#1a1a1a",
                            path_effects=[pe.withStroke(linewidth=1.8, foreground="white")])
-        axins.set_title("대구광역시 (자치구)", fontsize=11, fontweight="bold")
-        axins.set_xticks([]); axins.set_yticks([])
+        for s in ax_in.spines.values():
+            s.set_edgecolor("#e03030"); s.set_linewidth(1.8)
+        ax_in.set_title("대구광역시 (자치구)", fontsize=12, fontweight="bold")
+        ax_in.set_xticks([]); ax_in.set_yticks([])
 
-        plt.tight_layout()
+        # 공통 범례(우하): 등간격 색 구간
+        ax_cb.set_axis_off()
+        sm = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap); sm.set_array([])
+        cb = fig.colorbar(sm, ax=ax_cb, orientation="horizontal", fraction=0.5,
+                          aspect=18, pad=0.05)
+        cb.set_label("상대 감소율 평균 (%)", fontsize=11)
+        cb.set_ticks(bounds); cb.set_ticklabels([f"{b:.0f}" for b in bounds])
+
         out = f"{OUT_DIR}/regional_decrease_{period}.png"
         plt.savefig(out, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
         print("저장:", out)
