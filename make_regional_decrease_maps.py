@@ -161,20 +161,26 @@ def main():
         cb.set_label("상대 감소율 평균 (%)", fontsize=11)
         cb.set_ticks(bounds); cb.set_ticklabels([f"{b:.0f}" for b in bounds])
 
-        # ── 삽도 폭 = 범례(컬러바) 폭에 맞추고, 대구 종횡비로 높이 산정 ──
+        # ── 삽도의 대구 크기 = 메인의 대구 크기 (동일 축척 m/inch) ──
         fig.canvas.draw()
         fig_w_in, fig_h_in = fig.get_size_inches()
+        mpos = ax.get_position()
+        mx0, mx1 = ax.get_xlim(); my0, my1 = ax.get_ylim()
+        # 메인은 aspect=equal → x·y 동일 축척. 바인딩 차원으로 m/inch 산정
+        s_main = max((mx1 - mx0) / (mpos.width * fig_w_in),
+                     (my1 - my0) / (mpos.height * fig_h_in))
         pad = 0.08
         dw = (dmaxx - dminx) * (1 + 2 * pad); dh = (dmaxy - dminy) * (1 + 2 * pad)
         ax_in.set_xlim(dminx - (dmaxx - dminx) * pad, dmaxx + (dmaxx - dminx) * pad)
         ax_in.set_ylim(dminy - (dmaxy - dminy) * pad, dmaxy + (dmaxy - dminy) * pad)
-        ax_in.set_aspect("auto")   # 박스 크기로 축척 제어(왜곡 방지 위해 폭·높이 비율=데이터 비율)
-        cb_pos = cb.ax.get_position()
-        wf = cb_pos.width                       # 삽도 폭 = 컬러바 폭
-        hf = wf * (dh / dw) * (fig_w_in / fig_h_in)   # 데이터 종횡비 유지
+        ax_in.set_aspect("auto")   # 박스 크기로 축척을 직접 제어
+        w_in = dw / s_main; h_in = dh / s_main
         ipos = ax_in.get_position()
         top = ipos.y0 + ipos.height
+        # 범례(컬러바)의 가로 중심에 삽도를 정렬
+        cb_pos = cb.ax.get_position()
         center_x = cb_pos.x0 + cb_pos.width / 2
+        wf = w_in / fig_w_in; hf = h_in / fig_h_in
         ax_in.set_position([center_x - wf / 2, top - hf, wf, hf])
 
         out = f"{OUT_DIR}/regional_decrease_{period}.png"
