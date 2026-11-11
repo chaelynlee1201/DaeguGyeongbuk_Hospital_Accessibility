@@ -234,14 +234,14 @@ def main():
     plt.savefig(out5, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
     print("저장:", out5)
 
-    # ── (6) 분석 포함 격자(노랑) + 제외 격자(회색) + 도로망(참고 지도 파란색) ──
-    ROAD_BLUE = "#6baed6"     # 참고 지도(그림1)의 버스 노선 파란색 계열
+    # ── (6) 분석 포함 격자(흰색) + 제외 격자(회색) + 도로망(참고 지도 진한 파랑) ──
+    ROAD_BLUE = "#08519c"     # 참고 지도(그림1)의 가장 진한 파랑(Bus >=400)
     roads = load_osm_roads(target.union_all())            # 대상 지역 경계로 clip
     fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
     # 회색 배경 없이 경계 바운더리만
     target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.2, zorder=3)
     excluded.plot(ax=ax, color="#d9d9d9", edgecolor="none", linewidth=0, zorder=1)
-    used.plot(ax=ax, color="#f4c430", edgecolor="none", linewidth=0, alpha=0.95, zorder=2)
+    used.plot(ax=ax, color="white", edgecolor="none", linewidth=0, zorder=2)
     if roads is not None:
         roads.plot(ax=ax, color=ROAD_BLUE, linewidth=0.8, alpha=0.9, zorder=4)
     # study_area_boundary와 동일 라벨(대구 통합)
@@ -252,7 +252,7 @@ def main():
                     path_effects=[pe.withStroke(linewidth=3, foreground="white")])
     ax.set_xlim(gminx - gmx, gmaxx + gmx); ax.set_ylim(gminy - gmy, gmaxy + gmy)
     ax.set_axis_off()
-    handles = [Patch(facecolor="#f4c430", edgecolor="none", label=f"분석 대상 격자 ({len(used):,}개)"),
+    handles = [Patch(facecolor="white", edgecolor="#999999", label=f"분석 대상 격자 ({len(used):,}개)"),
                Patch(facecolor="#d9d9d9", edgecolor="none", label=f"분석 제외 격자 (인구 0, {len(excluded):,}개)")]
     if roads is not None:
         handles.append(Line2D([0], [0], color=ROAD_BLUE, lw=2.0, label="도로망(OSM)"))
