@@ -115,7 +115,8 @@ def main():
         norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
 
         # 레이아웃: 좌(메인 지도) | 우(삽도 + 세로 범례) — 삽도가 메인을 가리지 않게
-        fig = plt.figure(figsize=(17, 11), facecolor="white")
+        # 대상 지역 종횡비(H/W≈0.77, 가로로 넓음)에 맞춰 figure 높이를 줄여 위아래 여백 제거
+        fig = plt.figure(figsize=(17, 8.2), facecolor="white")
         gs = fig.add_gridspec(1, 3, width_ratios=[1.7, 1.05, 0.18],
                               wspace=0.0)
         ax = fig.add_subplot(gs[0, 0])       # 메인(좌)
