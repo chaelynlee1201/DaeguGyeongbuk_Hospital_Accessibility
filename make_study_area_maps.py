@@ -65,10 +65,15 @@ def load_osm_roads(clip_geom_5179):
         if roads is None or len(roads) == 0:
             print("[경고] OSM 도로망이 비어 있음")
             return None
+        # 주요 간선도로만: highway 태그 상위 등급
+        major = ["motorway", "trunk", "primary", "secondary",
+                 "motorway_link", "trunk_link", "primary_link", "secondary_link"]
+        if "highway" in roads.columns:
+            roads = roads[roads["highway"].isin(major)]
         roads = roads.to_crs("EPSG:5179")
         clip = gpd.GeoSeries([clip_geom_5179], crs="EPSG:5179")
         roads = gpd.clip(roads, clip)                     # 대구·경북권 경계로 clip
-        print(f"OSM 도로망: {len(roads):,}개 (대상 지역 clip 후)")
+        print(f"OSM 간선도로: {len(roads):,}개 (대상 지역 clip 후)")
         return roads
     except Exception as e:
         print(f"[경고] OSM 도로망 로드 실패: {e}")
@@ -234,16 +239,16 @@ def main():
     plt.savefig(out5, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
     print("저장:", out5)
 
-    # ── (6) 분석 포함 격자(흰색) + 제외 격자(회색) + 도로망(참고 지도 진한 파랑) ──
-    ROAD_BLUE = "#08519c"     # 참고 지도(그림1)의 가장 진한 파랑(Bus >=400)
-    roads = load_osm_roads(target.union_all())            # 대상 지역 경계로 clip
+    # ── (6) 분석 포함 격자(흰색) + 제외 격자(회색) + 주요 간선도로(중간 파랑) ──
+    ROAD_BLUE = "#4292c6"     # 참고 지도(그림1)의 중간 파랑
+    roads = load_osm_roads(target.union_all())            # 대상 지역 경계로 clip, 간선만
     fig, ax = plt.subplots(figsize=(11, 12), facecolor="white")
     # 회색 배경 없이 경계 바운더리만
     target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.2, zorder=3)
     excluded.plot(ax=ax, color="#d9d9d9", edgecolor="none", linewidth=0, zorder=1)
     used.plot(ax=ax, color="white", edgecolor="none", linewidth=0, zorder=2)
     if roads is not None:
-        roads.plot(ax=ax, color=ROAD_BLUE, linewidth=0.8, alpha=0.9, zorder=4)
+        roads.plot(ax=ax, color=ROAD_BLUE, linewidth=1.0, alpha=0.95, zorder=4)
     # study_area_boundary와 동일 라벨(대구 통합)
     for name, geom in label_groups():
         c = geom.representative_point()
