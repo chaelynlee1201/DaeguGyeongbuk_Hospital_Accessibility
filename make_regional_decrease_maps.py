@@ -176,11 +176,12 @@ def main():
         ax_in.set_aspect("auto")   # 박스 크기로 축척을 직접 제어
         w_in = dw / s_main; h_in = dh / s_main
         ipos = ax_in.get_position()
-        # 우측 컬럼 영역 안에서, 셀 좌상단 기준으로 배치(메인을 가리지 않음)
-        left = ipos.x0
         top = ipos.y0 + ipos.height
-        ax_in.set_position([left, top - h_in / fig_h_in,
-                            w_in / fig_w_in, h_in / fig_h_in])
+        # 범례(컬러바)의 가로 중심에 삽도를 정렬
+        cb_pos = cb.ax.get_position()
+        center_x = cb_pos.x0 + cb_pos.width / 2
+        wf = w_in / fig_w_in; hf = h_in / fig_h_in
+        ax_in.set_position([center_x - wf / 2, top - hf, wf, hf])
 
         out = f"{OUT_DIR}/regional_decrease_{period}.png"
         plt.savefig(out, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
