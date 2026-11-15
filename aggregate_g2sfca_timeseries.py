@@ -262,6 +262,13 @@ def main():
               f"(전체 수요격자의 {n_full/n_demand*100:.1f}%, 감소율 산정격자의 {n_full/max(n_calc,1)*100:.1f}%) "
               f"| 해당 격자 인구 {pop_full:,}명")
 
+    # 상대 감소율 중앙값·평균 비교 (산정 대상=상위5%>0 격자)
+    print("\n[상대 감소율(%) 중앙값 vs 평균]  (상위5%(P05)>0 인 격자 기준)")
+    for period in PERIODS:
+        d = grids[period]["dec_pct"].dropna()
+        print(f"  {PERIODS[period]}: 중앙값 {d.median():.1f}% · 평균 {d.mean():.1f}% "
+              f"· 표준편차 {d.std():.1f}% (n={len(d):,})")
+
     # 요약
     for period in PERIODS:
         print(f"\n[{PERIODS[period]}] 격자 분위·감소율 요약 "
