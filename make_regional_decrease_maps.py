@@ -64,6 +64,12 @@ def assign_grid_to_sigungu(grid, sig):
     ov["a"] = ov.geometry.area
     idx = ov.groupby("GRID_CD")["a"].idxmax()
     best = ov.loc[idx, ["GRID_CD", "SIGUNGU_CD"]].set_index("GRID_CD")["SIGUNGU_CD"]
+    # 배정 격자 수 진단(작은 자치구가 면적최대 배정에서 격자를 거의 못 가져가는지 확인)
+    cnt = best.value_counts()
+    nm = dict(zip(sig["SIGUNGU_CD"], sig["SIGUNGU_NM"]))
+    print("  [격자 배정 수] " +
+          ", ".join(f"{nm.get(c, c)}={cnt.get(c, 0)}"
+                    for c in sig["SIGUNGU_CD"] if str(c).startswith("22")))
     return best
 
 
