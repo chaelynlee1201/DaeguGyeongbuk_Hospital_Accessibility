@@ -215,11 +215,12 @@ def main():
 
     def plot_percentile_grid_sharedlegend(cmap_p, norm_p, out_path, extend="max"):
         """6장 + 오른쪽에 공통 범례 1개(크게). 패널별 컬러바 없음."""
-        fig = plt.figure(figsize=(23, 11.5), facecolor="white")
-        gs = fig.add_gridspec(len(PERIODS), 4, width_ratios=[1, 1, 1, 0.22], wspace=0.02,
-                              hspace=-0.1)
+        # 지도 종횡비(가로로 넓음)에 맞춰 figure 높이를 잡아 셀 내 letterbox·행 겹침 방지
+        fig = plt.figure(figsize=(23, 9.2), facecolor="white")
+        gs = fig.add_gridspec(len(PERIODS), 4, width_ratios=[1, 1, 1, 0.22],
+                              wspace=0.02, hspace=0.18)
         fig.suptitle("Gaussian 2SFCA 의료접근성 분위 (평일 42일)",
-                     fontsize=26, fontweight="bold", y=0.975)
+                     fontsize=26, fontweight="bold", y=0.99)
         for r, period in enumerate(PERIODS):
             g = grids[period]
             for c, q in enumerate(PCTLS):
@@ -235,8 +236,8 @@ def main():
                               loc="lower left", fontsize=11, frameon=True)
                 name, pcode = DISPLAY[q]
                 ax.set_title(f"{PERIODS[period]} · {name} ({pcode})",
-                             fontsize=16, fontweight="bold", pad=1)
-                ax.set_axis_off(); ax.set_anchor("N")
+                             fontsize=16, fontweight="bold", pad=6)
+                ax.set_axis_off()
         # 공통 범례(우측 세로 컬러바, 크게)
         cax = fig.add_subplot(gs[:, 3]); cax.set_axis_off()
         sm = matplotlib.cm.ScalarMappable(norm=norm_p, cmap=cmap_p); sm.set_array([])
@@ -244,7 +245,7 @@ def main():
                           pad=0.02, extend=extend)
         cb.set_label("G2SFCA 접근성 지수 (1,000명당 접근 가능 의사 수)", fontsize=15)
         cb.ax.tick_params(labelsize=13)
-        fig.subplots_adjust(top=0.93, bottom=0.01)
+        fig.subplots_adjust(top=0.90, bottom=0.02)
         plt.savefig(out_path, dpi=160, facecolor="white", bbox_inches="tight"); plt.close(fig)
         print("저장:", out_path)
 
