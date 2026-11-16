@@ -131,6 +131,8 @@ def main():
     main_regions = pd.concat([gb, daegu_row], ignore_index=True)
     daegu_districts = sig_t[sig_t["SIGUNGU_CD"].isin(DAEGU_CODES)][
         ["SIGUNGU_CD", "SIGUNGU_NM", "geometry"]].copy()
+    # 세분화 버전: 경북 8개 시·군 + 대구 자치구 9개 (대구 통합 안 함)
+    fine_regions = pd.concat([gb, daegu_districts], ignore_index=True)
 
     for period in PERIODS:
         med, df = regional_stat(period, assign)
@@ -140,6 +142,8 @@ def main():
         mr["val"] = mr["SIGUNGU_CD"].map(lambda c: daegu_val if c == "DAEGU" else med.get(c, np.nan))
         dd = daegu_districts.copy()
         dd["val"] = dd["SIGUNGU_CD"].map(lambda c: med.get(c, np.nan))
+        mrf = fine_regions.copy()                            # 대구 자치구까지 세분화
+        mrf["val"] = mrf["SIGUNGU_CD"].map(lambda c: med.get(c, np.nan))
         dminx, dminy, dmaxx, dmaxy = daegu_geom.bounds
 
         # 등간격 공통 구간(메인+삽도 전체 값 기준)
@@ -183,12 +187,23 @@ def main():
         plt.savefig(outA, dpi=200, facecolor="white", bbox_inches="tight", pad_inches=0.02); plt.close(fig)
         print("저장:", outA)
 
-        # ── (B) 삽도 없이 메인만 (PPT용) + 세로 범례 ──
+        # ── (B) 삽도 없이, 대구를 자치구로 세분화한 단일 지도 (PPT용) + 세로 범례 ──
         fig = plt.figure(figsize=(13, 8.6), facecolor="white")
         gs = fig.add_gridspec(1, 2, width_ratios=[1, 0.12], wspace=0.0)
         ax = fig.add_subplot(gs[0, 0]); ax_cb = fig.add_subplot(gs[0, 1])
         fig.subplots_adjust(left=0.005, right=0.995, top=0.995, bottom=0.005)
-        draw_main(ax, mr, cmap, norm, label_fs=19, show_box=False)
+        # 대구 자치구는 라벨이 작게(겹침 방지), 경북 시·군은 크게
+        mrf.plot(ax=ax, column="val", cmap=cmap, norm=norm, edgecolor="#2c2c2c",
+                 linewidth=1.0, legend=False, missing_kwds={"color": "#eeeeee"})
+        for _, r in mrf.iterrows():
+            c = r.geometry.representative_point()
+            is_daegu = r["SIGUNGU_CD"].startswith("22")
+            fs = 11 if is_daegu else 18
+            lab = r["SIGUNGU_NM"] + (f"\n{r['val']:.0f}%" if pd.notna(r["val"]) else "")
+            ax.annotate(lab, xy=(c.x, c.y), ha="center", va="center", fontsize=fs,
+                        fontweight="bold", color="#1a1a1a",
+                        path_effects=[pe.withStroke(linewidth=3, foreground="white")])
+        ax.set_axis_off()
         add_vlegend(fig, ax_cb)
         outB = f"{OUT_DIR}/regional_decrease_{period}_noinset.png"
         plt.savefig(outB, dpi=200, facecolor="white", bbox_inches="tight", pad_inches=0.02); plt.close(fig)
