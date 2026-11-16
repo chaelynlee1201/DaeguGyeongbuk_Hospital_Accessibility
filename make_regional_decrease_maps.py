@@ -243,6 +243,15 @@ def main():
         print(f"  [{period}] 지역 중앙값(%): " +
               ", ".join(f"{n}={v:.0f}" for n, v in zip(mr['SIGUNGU_NM'], mr['val']) if pd.notna(v)))
 
+        # ── 검토: 지역별 유효 격자 수 · 중앙값 · 100%(나쁜날 접근0) 격자 비율 ──
+        name_map = dict(zip(sig_t["SIGUNGU_CD"], sig_t["SIGUNGU_NM"]))
+        print(f"  [{period}] 지역별 유효격자수 / 중앙값 / 100%격자비율")
+        for code, sub in df.groupby("SIGUNGU_CD"):
+            v = sub["dec_pct"]
+            nm = "대구-" + name_map.get(code, code) if str(code).startswith("22") else name_map.get(code, code)
+            print(f"    {nm:<10} n={len(v):>4}  중앙값={v.median():5.0f}%  "
+                  f"100%격자={100*(v>=99.999).mean():4.0f}%  평균={v.mean():5.0f}%")
+
 
 if __name__ == "__main__":
     main()
