@@ -103,7 +103,7 @@ def main():
     for name, geom in label_groups():
         c = geom.representative_point()
         ax.annotate(name, xy=(c.x, c.y), ha="center", va="center",
-                    fontsize=12, fontweight="bold", color="#1a1a1a", zorder=3,
+                    fontsize=17, fontweight="bold", color="#1a1a1a", zorder=3,
                     path_effects=[pe.withStroke(linewidth=3, foreground="white")])
     ax.set_xlim(minx - mx, maxx + mx); ax.set_ylim(miny - my, maxy + my)
     ax.set_title("연구 지역: 대구·경북", fontsize=20, fontweight="bold", pad=8)
@@ -111,7 +111,7 @@ def main():
     # 간이 스케일바(20km)
     sb = 20000; x0 = minx - mx + (maxx - minx) * 0.04; y0 = miny - my + (maxy - miny) * 0.04
     ax.plot([x0, x0 + sb], [y0, y0], color="black", lw=3, zorder=5)
-    ax.text(x0 + sb / 2, y0 + (maxy - miny) * 0.012, "20 km", ha="center", fontsize=10, zorder=5)
+    ax.text(x0 + sb / 2, y0 + (maxy - miny) * 0.012, "20 km", ha="center", fontsize=13, zorder=5)
     plt.tight_layout()
     out1 = f"{OUT_DIR}/study_area_boundary.png"
     plt.savefig(out1, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
@@ -139,26 +139,32 @@ def main():
     for name, geom in label_groups():
         c = geom.representative_point()
         ax.annotate(name, xy=(c.x, c.y), ha="center", va="center",
-                    fontsize=12, fontweight="bold", color="#1a1a1a", zorder=4,
-                    path_effects=[pe.withStroke(linewidth=3, foreground="white")])
+                    fontsize=17, fontweight="bold", color="#1a1a1a", zorder=4,
+                    path_effects=[pe.withStroke(linewidth=3.5, foreground="white")])
 
     bminx, bminy, bmaxx, bmaxy = buf.bounds
     bx, by = (bmaxx - bminx) * 0.05, (bmaxy - bminy) * 0.05
     ax.set_xlim(bminx - bx, bmaxx + bx); ax.set_ylim(bminy - by, bmaxy + by)
     ax.set_axis_off()
+    plt.tight_layout()
+    out2 = f"{OUT_DIR}/medical_facilities_supply.png"
+    plt.savefig(out2, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
+    print("저장:", out2)
+
+    # ── (2-범례) 원 크기 범례만 별도 그림 ──
     legvals = sorted({int(round(v)) for v in [max(1, dmax * 0.1), dmax * 0.4, dmax] if v >= 1})
     handles = [Line2D([0], [0], marker="o", color="none", markerfacecolor="#c0392b",
                       alpha=0.55, markeredgecolor="white",
                       markersize=math.sqrt(8 + (v / dmax) * 900), label=f"의사 {v}명")
                for v in legvals]
-    handles.append(Line2D([0], [0], color="#e07b39", lw=2.0, ls="--", label="20km 버퍼"))
-    ax.legend(handles=handles, loc="lower left", fontsize=15, frameon=True,
-              title="총의사수", title_fontsize=16, labelspacing=2.0, borderpad=1.2,
-              handletextpad=1.5)
-    plt.tight_layout()
-    out2 = f"{OUT_DIR}/medical_facilities_supply.png"
-    plt.savefig(out2, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
-    print("저장:", out2)
+    figL, axL = plt.subplots(figsize=(3.2, 3.2), facecolor="white")
+    axL.axis("off")
+    axL.legend(handles=handles, loc="center", fontsize=17, frameon=True,
+               title="총의사수", title_fontsize=18, labelspacing=2.2, borderpad=1.3,
+               handletextpad=1.6)
+    outL = f"{OUT_DIR}/medical_facilities_supply_legend.png"
+    figL.savefig(outL, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(figL)
+    print("저장:", outL)
 
     # 참고 통계
     print(f"\n공급 시설 {len(fac):,}개 | 의사수 합 {int(fac['N_DOCTOR'].sum()):,}")
@@ -200,7 +206,7 @@ def main():
                  fontsize=18, fontweight="bold", pad=8)
     ax.legend(handles=[Patch(facecolor="#4a7fb5", edgecolor="none",
                              label=f"분석 대상 격자 ({len(used):,}개)")],
-              loc="lower left", fontsize=10, frameon=True)
+              loc="lower left", fontsize=15, frameon=True)
     plt.tight_layout()
     out4 = f"{OUT_DIR}/population_grid_used.png"
     plt.savefig(out4, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
@@ -232,7 +238,7 @@ def main():
                       alpha=0.55, markeredgecolor="white",
                       markersize=math.sqrt(8 + (v / dmax) * 900),
                       label=f"의사 {v}명") for v in legvals]
-    ax.legend(handles=handles, loc="lower left", fontsize=9, frameon=True,
+    ax.legend(handles=handles, loc="lower left", fontsize=15, frameon=True,
               title="총의사수", labelspacing=1.4, borderpad=1.0)
     plt.tight_layout()
     out5 = f"{OUT_DIR}/facilities_proportional_doctors.png"
@@ -253,12 +259,12 @@ def main():
     for name, geom in label_groups():
         c = geom.representative_point()
         ax.annotate(name, xy=(c.x, c.y), ha="center", va="center",
-                    fontsize=12, fontweight="bold", color="#1a1a1a", zorder=6,
+                    fontsize=16, fontweight="bold", color="#1a1a1a", zorder=6,
                     path_effects=[pe.withStroke(linewidth=3, foreground="white")])
     ax.set_xlim(gminx - gmx, gmaxx + gmx); ax.set_ylim(gminy - gmy, gmaxy + gmy)
     ax.set_axis_off()
     handles = [Patch(facecolor="#c8c8c8", edgecolor="none", label="분석 제외 격자")]
-    ax.legend(handles=handles, loc="lower left", fontsize=13, frameon=True,
+    ax.legend(handles=handles, loc="lower left", fontsize=15, frameon=True,
               labelspacing=1.2, borderpad=1.0)
     plt.tight_layout()
     out6 = f"{OUT_DIR}/grid_with_roads.png"
@@ -280,7 +286,7 @@ def main():
                  fontsize=18, fontweight="bold", pad=8)
     if roads is not None:
         ax.legend(handles=[Line2D([0], [0], color="#1f6feb", lw=2.5, label="도로망(OSM)")],
-                  loc="lower left", fontsize=10, frameon=True)
+                  loc="lower left", fontsize=15, frameon=True)
     plt.tight_layout()
     out7 = f"{OUT_DIR}/population_grid_with_roads.png"
     plt.savefig(out7, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
@@ -301,12 +307,12 @@ def main():
     for name, geom in label_groups():
         c = geom.representative_point()
         ax.annotate(name, xy=(c.x, c.y), ha="center", va="center",
-                    fontsize=12, fontweight="bold", color="#1a1a1a", zorder=5,
+                    fontsize=16, fontweight="bold", color="#1a1a1a", zorder=5,
                     path_effects=[pe.withStroke(linewidth=3, foreground="white")])
     ax.set_xlim(minx - mx, maxx + mx); ax.set_ylim(miny - my, maxy + my)
     # 스케일바(20km)
     ax.plot([x0, x0 + sb], [y0, y0], color="black", lw=3, zorder=6)
-    ax.text(x0 + sb / 2, y0 + (maxy - miny) * 0.012, "20 km", ha="center", fontsize=10, zorder=6)
+    ax.text(x0 + sb / 2, y0 + (maxy - miny) * 0.012, "20 km", ha="center", fontsize=13, zorder=6)
     ax.set_title("연구 지역 · 인구 분포 · 도로망", fontsize=20, fontweight="bold", pad=8)
     ax.set_axis_off()
     plt.tight_layout()

@@ -1,11 +1,14 @@
 """
-Figure 2: 지역별 상대 감소율 평균 단계구분도 (시간대별 별도, 등간격).
+Figure 2: 지역별 상대 감소율 '중앙값' 단계구분도 (시간대별 별도, 등간격).
 
 - 각 1km 격자를 '교차 면적이 가장 큰' 시군구에 배정(경계 격자 처리).
-- 시군구별 상대 감소율(dec_pct) 평균을 산정.
+- 시군구별 상대 감소율(dec_pct) 중앙값을 산정.
 - 메인 지도: 경북 8개 시·군 + 대구광역시(자치구 통합) = 9개 지역.
 - 삽도(inset): 대구광역시만 확대, 자치구(중·동·서·남·북·수성·달서구, 달성·군위군) 단위.
-- 메인/삽도 색 구간(등간격)·범례 동일.
+- 시간대별 3종 생성:
+    (A) regional_decrease_<period>.png          : 메인 + 옆 삽도
+    (B) regional_decrease_<period>_noinset.png  : 삽도 없이 메인만 (PPT용)
+    (C) regional_decrease_<period>_overlay.png  : 삽도를 대구 위치에 겹쳐 배치
 
 입력:
   data/g2sfca_timeseries/g2sfca_ts_grid_percentiles_{0900,1200}.gpkg  (GRID_CD, dec_pct)
@@ -64,14 +67,49 @@ def assign_grid_to_sigungu(grid, sig):
     return best
 
 
-def regional_means(period, grid, assign):
-    """시군구별 dec_pct 평균(시군구 코드 → 값). dec_pct는 결과 gpkg에서 조인."""
+def regional_stat(period, assign):
+    """시군구별 dec_pct 중앙값(코드→값)과 격자단위 merge df를 반환.
+    dec_pct가 NaN(상위5%=0 등 산정불가)인 격자는 제외."""
     pct = gpd.read_file(PCT_GPKG.format(period=period))[["GRID_CD", "dec_pct"]]
     pct["GRID_CD"] = pct["GRID_CD"].astype(str)
-    df = pct.merge(assign.rename("SIGUNGU_CD"), left_on="GRID_CD", right_index=True)
-    # dec_pct가 NaN(상위5%=0 등 산정불가)인 격자는 평균에서 제외
-    means = df.dropna(subset=["dec_pct"]).groupby("SIGUNGU_CD")["dec_pct"].mean()
-    return means
+    df = pct.merge(assign.rename("SIGUNGU_CD"), left_on="GRID_CD",
+                   right_index=True).dropna(subset=["dec_pct"])
+    med = df.groupby("SIGUNGU_CD")["dec_pct"].median()
+    return med, df
+
+
+def draw_main(ax, mr, cmap, norm, label_fs, show_box=True, box_bounds=None):
+    """메인 지도(9개 지역) 그리기."""
+    mr.plot(ax=ax, column="val", cmap=cmap, norm=norm, edgecolor="#2c2c2c",
+            linewidth=1.2, legend=False, missing_kwds={"color": "#eeeeee"})
+    for _, r in mr.iterrows():
+        c = r.geometry.representative_point()
+        lab = r["SIGUNGU_NM"] + (f"\n{r['val']:.0f}%" if pd.notna(r["val"]) else "")
+        ax.annotate(lab, xy=(c.x, c.y), ha="center", va="center", fontsize=label_fs,
+                    fontweight="bold", color="#1a1a1a",
+                    path_effects=[pe.withStroke(linewidth=3.5, foreground="white")])
+    if show_box and box_bounds is not None:
+        x0, y0, x1, y1 = box_bounds
+        ax.add_patch(Rectangle((x0, y0), x1 - x0, y1 - y0, fill=False,
+                               edgecolor="#e03030", linewidth=3.5, zorder=5))
+    ax.set_axis_off()
+
+
+def draw_daegu(ax, dd, cmap, norm, label_fs, red_border=True):
+    """대구 자치구 삽도 그리기."""
+    dd.plot(ax=ax, column="val", cmap=cmap, norm=norm, edgecolor="#2c2c2c",
+            linewidth=0.9, legend=False, missing_kwds={"color": "#eeeeee"})
+    for _, r in dd.iterrows():
+        c = r.geometry.representative_point()
+        lab = r["SIGUNGU_NM"].replace("군위군", "군위").replace("달성군", "달성") \
+              + (f"\n{r['val']:.0f}%" if pd.notna(r["val"]) else "")
+        ax.annotate(lab, xy=(c.x, c.y), ha="center", va="center", fontsize=label_fs,
+                    fontweight="bold", color="#1a1a1a",
+                    path_effects=[pe.withStroke(linewidth=2.2, foreground="white")])
+    if red_border:
+        for s in ax.spines.values():
+            s.set_edgecolor("#e03030"); s.set_linewidth(3.5)
+    ax.set_xticks([]); ax.set_yticks([])
 
 
 def main():
@@ -95,17 +133,14 @@ def main():
         ["SIGUNGU_CD", "SIGUNGU_NM", "geometry"]].copy()
 
     for period in PERIODS:
-        means = regional_means(period, grid, assign)
-        # 대구 통합값 = 대구 자치구에 배정된 격자 전체의 평균(코드 묶어 재계산)
-        pct = gpd.read_file(PCT_GPKG.format(period=period))[["GRID_CD", "dec_pct"]]
-        pct["GRID_CD"] = pct["GRID_CD"].astype(str)
-        df = pct.merge(assign.rename("SIGUNGU_CD"), left_on="GRID_CD", right_index=True).dropna(subset=["dec_pct"])
-        daegu_mean = df[df["SIGUNGU_CD"].isin(DAEGU_CODES)]["dec_pct"].mean()
+        med, df = regional_stat(period, assign)
+        daegu_val = df[df["SIGUNGU_CD"].isin(DAEGU_CODES)]["dec_pct"].median()  # 대구 통합=중앙값
 
         mr = main_regions.copy()
-        mr["val"] = mr["SIGUNGU_CD"].map(lambda c: daegu_mean if c == "DAEGU" else means.get(c, np.nan))
+        mr["val"] = mr["SIGUNGU_CD"].map(lambda c: daegu_val if c == "DAEGU" else med.get(c, np.nan))
         dd = daegu_districts.copy()
-        dd["val"] = dd["SIGUNGU_CD"].map(lambda c: means.get(c, np.nan))
+        dd["val"] = dd["SIGUNGU_CD"].map(lambda c: med.get(c, np.nan))
+        dminx, dminy, dmaxx, dmaxy = daegu_geom.bounds
 
         # 등간격 공통 구간(메인+삽도 전체 값 기준)
         allv = np.concatenate([mr["val"].dropna().values, dd["val"].dropna().values])
@@ -114,80 +149,83 @@ def main():
         cmap = plt.get_cmap(CMAP, N_CLASSES)
         norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
 
-        # 레이아웃: 좌(메인 지도) | 우(삽도 + 세로 범례) — 삽도가 메인을 가리지 않게
-        # 대상 지역 종횡비(H/W≈0.77, 가로로 넓음)에 맞춰 figure 높이를 줄여 위아래 여백 제거
+        def add_vlegend(fig, ax_cb):
+            ax_cb.set_axis_off()
+            sm = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap); sm.set_array([])
+            cb = fig.colorbar(sm, ax=ax_cb, orientation="vertical", fraction=0.6, aspect=16, pad=0.05)
+            cb.set_label("상대 감소율 중앙값 (%)", fontsize=15)
+            cb.set_ticks(bounds); cb.set_ticklabels([f"{b:.0f}" for b in bounds])
+            cb.ax.tick_params(labelsize=13)
+
+        # ── (A) 메인 + 삽도(옆 배치) + 세로 범례 ──
         fig = plt.figure(figsize=(17, 8.2), facecolor="white")
-        gs = fig.add_gridspec(1, 3, width_ratios=[1.7, 1.05, 0.18],
-                              wspace=0.0)
-        ax = fig.add_subplot(gs[0, 0])       # 메인(좌)
-        ax_in = fig.add_subplot(gs[0, 1])    # 삽도(가운데)
-        ax_cb = fig.add_subplot(gs[0, 2])    # 세로 범례(우)
+        gs = fig.add_gridspec(1, 3, width_ratios=[1.7, 1.05, 0.18], wspace=0.0)
+        ax = fig.add_subplot(gs[0, 0]); ax_in = fig.add_subplot(gs[0, 1]); ax_cb = fig.add_subplot(gs[0, 2])
         fig.subplots_adjust(left=0.005, right=0.995, top=0.995, bottom=0.005)
-
-        # 메인 지도
-        mr.plot(ax=ax, column="val", cmap=cmap, norm=norm, edgecolor="#2c2c2c",
-                linewidth=1.2, legend=False, missing_kwds={"color": "#eeeeee"})
-        for _, r in mr.iterrows():
-            c = r.geometry.representative_point()
-            lab = r["SIGUNGU_NM"] + (f"\n{r['val']:.0f}%" if pd.notna(r["val"]) else "")
-            ax.annotate(lab, xy=(c.x, c.y), ha="center", va="center", fontsize=15,
-                        fontweight="bold", color="#1a1a1a",
-                        path_effects=[pe.withStroke(linewidth=3, foreground="white")])
-        # 메인에 대구 확대영역 사각형 표시(참고 이미지처럼)
-        dminx, dminy, dmaxx, dmaxy = daegu_geom.bounds
-        ax.add_patch(Rectangle((dminx, dminy), dmaxx - dminx, dmaxy - dminy,
-                               fill=False, edgecolor="#e03030", linewidth=3.5, zorder=5))
-        ax.set_axis_off()
-
-        # 삽도(우상): 대구 자치구 (동일 norm·cmap)
-        dd.plot(ax=ax_in, column="val", cmap=cmap, norm=norm, edgecolor="#2c2c2c",
-                linewidth=0.8, legend=False, missing_kwds={"color": "#eeeeee"})
-        for _, r in dd.iterrows():
-            c = r.geometry.representative_point()
-            lab = r["SIGUNGU_NM"].replace("군위군", "군위").replace("달성군", "달성") \
-                  + (f"\n{r['val']:.0f}%" if pd.notna(r["val"]) else "")
-            ax_in.annotate(lab, xy=(c.x, c.y), ha="center", va="center", fontsize=7.5,
-                           fontweight="bold", color="#1a1a1a",
-                           path_effects=[pe.withStroke(linewidth=1.8, foreground="white")])
-        for s in ax_in.spines.values():
-            s.set_edgecolor("#e03030"); s.set_linewidth(3.5)
-        ax_in.set_xticks([]); ax_in.set_yticks([])
-
-        # 공통 범례(우): 세로 등간격 색 구간
-        ax_cb.set_axis_off()
-        sm = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap); sm.set_array([])
-        cb = fig.colorbar(sm, ax=ax_cb, orientation="vertical", fraction=0.5,
-                          aspect=16, pad=0.05)
-        cb.set_label("상대 감소율 평균 (%)", fontsize=12)
-        cb.set_ticks(bounds); cb.set_ticklabels([f"{b:.0f}" for b in bounds])
-
-        # ── 삽도 축척 = 메인의 대구 축척 × 확대배율 ──
-        INSET_ZOOM = 1.3     # 메인 대구 대비 삽도 확대배율
+        draw_main(ax, mr, cmap, norm, label_fs=17, show_box=True,
+                  box_bounds=(dminx, dminy, dmaxx, dmaxy))
+        draw_daegu(ax_in, dd, cmap, norm, label_fs=11)
+        add_vlegend(fig, ax_cb)
+        # 삽도 축척 = 메인 대구 × 확대배율
+        INSET_ZOOM = 1.3
         fig.canvas.draw()
         fig_w_in, fig_h_in = fig.get_size_inches()
-        mpos = ax.get_position()
-        mx0, mx1 = ax.get_xlim(); my0, my1 = ax.get_ylim()
-        s_main = max((mx1 - mx0) / (mpos.width * fig_w_in),
-                     (my1 - my0) / (mpos.height * fig_h_in))
-        s_in = s_main / INSET_ZOOM        # 축척을 작게 → 대구가 크게 그려짐
-        pad = 0.06
+        mpos = ax.get_position(); mx0, mx1 = ax.get_xlim(); my0, my1 = ax.get_ylim()
+        s_main = max((mx1 - mx0) / (mpos.width * fig_w_in), (my1 - my0) / (mpos.height * fig_h_in))
+        s_in = s_main / INSET_ZOOM; pad = 0.06
         dw = (dmaxx - dminx) * (1 + 2 * pad); dh = (dmaxy - dminy) * (1 + 2 * pad)
         ax_in.set_xlim(dminx - (dmaxx - dminx) * pad, dmaxx + (dmaxx - dminx) * pad)
         ax_in.set_ylim(dminy - (dmaxy - dminy) * pad, dmaxy + (dmaxy - dminy) * pad)
         ax_in.set_aspect("auto")
-        w_in = dw / s_in; h_in = dh / s_in
-        wf = w_in / fig_w_in; hf = h_in / fig_h_in
-        # 메인 바로 옆(간격 최소)에 세로 중앙 배치
-        ipos = ax_in.get_position()
-        left = mpos.x0 + mpos.width + 0.005          # 메인 우측 경계 바로 옆
-        cy = mpos.y0 + mpos.height / 2               # 메인 세로 중심
-        ax_in.set_position([left, cy - hf / 2, wf, hf])
+        wf = (dw / s_in) / fig_w_in; hf = (dh / s_in) / fig_h_in
+        ax_in.set_position([mpos.x0 + mpos.width + 0.005, mpos.y0 + mpos.height / 2 - hf / 2, wf, hf])
+        outA = f"{OUT_DIR}/regional_decrease_{period}.png"
+        plt.savefig(outA, dpi=200, facecolor="white", bbox_inches="tight", pad_inches=0.02); plt.close(fig)
+        print("저장:", outA)
 
-        out = f"{OUT_DIR}/regional_decrease_{period}.png"
-        plt.savefig(out, dpi=200, facecolor="white", bbox_inches="tight", pad_inches=0.02)
-        plt.close(fig)
-        print("저장:", out)
-        print(f"  [{period}] 지역 평균(%): " +
+        # ── (B) 삽도 없이 메인만 (PPT용) + 세로 범례 ──
+        fig = plt.figure(figsize=(13, 8.6), facecolor="white")
+        gs = fig.add_gridspec(1, 2, width_ratios=[1, 0.12], wspace=0.0)
+        ax = fig.add_subplot(gs[0, 0]); ax_cb = fig.add_subplot(gs[0, 1])
+        fig.subplots_adjust(left=0.005, right=0.995, top=0.995, bottom=0.005)
+        draw_main(ax, mr, cmap, norm, label_fs=19, show_box=False)
+        add_vlegend(fig, ax_cb)
+        outB = f"{OUT_DIR}/regional_decrease_{period}_noinset.png"
+        plt.savefig(outB, dpi=200, facecolor="white", bbox_inches="tight", pad_inches=0.02); plt.close(fig)
+        print("저장:", outB)
+
+        # ── (C) 삽도를 대구 위치에 겹쳐 배치 + 세로 범례 ──
+        fig = plt.figure(figsize=(13, 8.6), facecolor="white")
+        gs = fig.add_gridspec(1, 2, width_ratios=[1, 0.12], wspace=0.0)
+        ax = fig.add_subplot(gs[0, 0]); ax_cb = fig.add_subplot(gs[0, 1])
+        fig.subplots_adjust(left=0.005, right=0.995, top=0.995, bottom=0.005)
+        draw_main(ax, mr, cmap, norm, label_fs=19, show_box=False)
+        add_vlegend(fig, ax_cb)
+        fig.canvas.draw()
+        fig_w_in, fig_h_in = fig.get_size_inches()
+        mpos = ax.get_position(); mx0, mx1 = ax.get_xlim(); my0, my1 = ax.get_ylim()
+        # 대구 bbox의 figure 좌표(겹쳐 배치 기준점)
+        def data_to_fig(x, y):
+            fx = mpos.x0 + (x - mx0) / (mx1 - mx0) * mpos.width
+            fy = mpos.y0 + (y - my0) / (my1 - my0) * mpos.height
+            return fx, fy
+        ZOOM_C = 2.2
+        cxd = (dminx + dmaxx) / 2; cyd = (dminy + dmaxy) / 2
+        fcx, fcy = data_to_fig(cxd, cyd)
+        s_main = max((mx1 - mx0) / (mpos.width * fig_w_in), (my1 - my0) / (mpos.height * fig_h_in))
+        s_in = s_main / ZOOM_C; pad = 0.06
+        dw = (dmaxx - dminx) * (1 + 2 * pad); dh = (dmaxy - dminy) * (1 + 2 * pad)
+        wf = (dw / s_in) / fig_w_in; hf = (dh / s_in) / fig_h_in
+        ax_ov = fig.add_axes([fcx - wf / 2, fcy - hf / 2, wf, hf])
+        ax_ov.set_xlim(dminx - (dmaxx - dminx) * pad, dmaxx + (dmaxx - dminx) * pad)
+        ax_ov.set_ylim(dminy - (dmaxy - dminy) * pad, dmaxy + (dmaxy - dminy) * pad)
+        ax_ov.set_aspect("auto")
+        draw_daegu(ax_ov, dd, cmap, norm, label_fs=11)
+        outC = f"{OUT_DIR}/regional_decrease_{period}_overlay.png"
+        plt.savefig(outC, dpi=200, facecolor="white", bbox_inches="tight", pad_inches=0.02); plt.close(fig)
+        print("저장:", outC)
+
+        print(f"  [{period}] 지역 중앙값(%): " +
               ", ".join(f"{n}={v:.0f}" for n, v in zip(mr['SIGUNGU_NM'], mr['val']) if pd.notna(v)))
 
 
