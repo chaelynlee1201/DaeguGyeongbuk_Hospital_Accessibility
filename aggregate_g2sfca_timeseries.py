@@ -213,11 +213,50 @@ def main():
         plt.savefig(out_path, dpi=160, facecolor="white", bbox_inches="tight"); plt.close(fig)
         print("저장:", out_path)
 
+    def plot_percentile_grid_sharedlegend(cmap_p, norm_p, out_path, extend="max"):
+        """6장 + 오른쪽에 공통 범례 1개(크게). 패널별 컬러바 없음."""
+        fig = plt.figure(figsize=(23, 11.5), facecolor="white")
+        gs = fig.add_gridspec(len(PERIODS), 4, width_ratios=[1, 1, 1, 0.22], wspace=0.02,
+                              hspace=-0.1)
+        fig.suptitle("Gaussian 2SFCA 의료접근성 분위 (평일 42일)",
+                     fontsize=26, fontweight="bold", y=0.975)
+        for r, period in enumerate(PERIODS):
+            g = grids[period]
+            for c, q in enumerate(PCTLS):
+                ax = fig.add_subplot(gs[r, c])
+                if len(excluded):
+                    excluded.plot(ax=ax, color=EXCLUDED_COLOR, edgecolor="none", zorder=0)
+                g.plot(ax=ax, column=f"p{q:02d}", cmap=cmap_p, norm=norm_p,
+                       legend=False, edgecolor="none", zorder=1)
+                target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.0, zorder=2)
+                if r == 0 and c == 0:
+                    ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
+                                             label="인구 0 (분석 제외)")],
+                              loc="lower left", fontsize=11, frameon=True)
+                name, pcode = DISPLAY[q]
+                ax.set_title(f"{PERIODS[period]} · {name} ({pcode})",
+                             fontsize=16, fontweight="bold", pad=1)
+                ax.set_axis_off(); ax.set_anchor("N")
+        # 공통 범례(우측 세로 컬러바, 크게)
+        cax = fig.add_subplot(gs[:, 3]); cax.set_axis_off()
+        sm = matplotlib.cm.ScalarMappable(norm=norm_p, cmap=cmap_p); sm.set_array([])
+        cb = fig.colorbar(sm, ax=cax, orientation="vertical", fraction=0.7, aspect=22,
+                          pad=0.02, extend=extend)
+        cb.set_label("G2SFCA 접근성 지수 (1,000명당 접근 가능 의사 수)", fontsize=15)
+        cb.ax.tick_params(labelsize=13)
+        fig.subplots_adjust(top=0.93, bottom=0.01)
+        plt.savefig(out_path, dpi=160, facecolor="white", bbox_inches="tight"); plt.close(fig)
+        print("저장:", out_path)
+
     # 등간격(Equal Interval) 단계구분도
     bounds_eq = np.linspace(0.0, vmax, N_CLASSES + 1)
     cmap_eq = plt.get_cmap("YlGnBu", N_CLASSES)
-    plot_percentile_grid(cmap_eq, matplotlib.colors.BoundaryNorm(bounds_eq, cmap_eq.N),
+    norm_eq = matplotlib.colors.BoundaryNorm(bounds_eq, cmap_eq.N)
+    plot_percentile_grid(cmap_eq, norm_eq,
                          f"{OUT_DIR}/g2sfca_ts_grid_percentile_maps.png", extend="max")
+    # 공통 범례 1개 버전(추가)
+    plot_percentile_grid_sharedlegend(cmap_eq, norm_eq,
+                         f"{OUT_DIR}/g2sfca_ts_grid_percentile_maps_sharedlegend.png", extend="max")
 
     # ── (2) 시간대별 상대 감소율(%) 비교 지도 2장 (공통 스케일 0~100%) ──
     fig, axes = plt.subplots(1, len(PERIODS), figsize=(18, 8), facecolor="white")
