@@ -140,7 +140,8 @@ def main():
     # 세분화 버전: 경북 8개 시·군 + 대구 자치구 9개 (대구 통합 안 함)
     fine_regions = pd.concat([gb, daegu_districts], ignore_index=True)
 
-    mr_by_period = {}   # 가로 합본 지도용: period → mr(대구 통합)
+    mr_by_period = {}    # 가로 합본 지도용: period → mr(대구 통합)
+    mrf_by_period = {}   # 가로 합본(세분화)용: period → mrf(대구 자치구 분리)
     for period in PERIODS:
         med, df = regional_stat(period, assign)
         daegu_val = df[df["SIGUNGU_CD"].isin(DAEGU_CODES)]["dec_pct"].median()  # 대구 통합=중앙값
@@ -152,6 +153,7 @@ def main():
         dd["val"] = dd["SIGUNGU_CD"].map(lambda c: med.get(c, np.nan))
         mrf = fine_regions.copy()                            # 대구 자치구까지 세분화
         mrf["val"] = mrf["SIGUNGU_CD"].map(lambda c: med.get(c, np.nan))
+        mrf_by_period[period] = mrf
         dminx, dminy, dmaxx, dmaxy = daegu_geom.bounds
 
         # 등간격 공통 구간(메인+삽도 전체 값 기준)
@@ -260,9 +262,9 @@ def main():
             print(f"    {nm:<10} n={len(v):>4}  중앙값={v.median():5.0f}%  "
                   f"100%격자={100*(v>=99.999).mean():4.0f}%  평균={v.mean():5.0f}%")
 
-    # ── (D) 09시+12시 가로 합본 + 하단 가로 범례 (대구 진한 테두리, 라벨 % 제거) ──
+    # ── (D) 09시+12시 가로 합본(대구 자치구 세분화) + 하단 가로 범례 (대구 진한 테두리) ──
     SUBT = {"0900": "09:00 기준", "1200": "12:00 기준"}
-    allv2 = np.concatenate([mr_by_period[p]["val"].dropna().values for p in PERIODS])
+    allv2 = np.concatenate([mrf_by_period[p]["val"].dropna().values for p in PERIODS])
     vmin2, vmax2 = float(np.nanmin(allv2)), float(np.nanmax(allv2))
     bounds2 = np.linspace(vmin2, vmax2, N_CLASSES + 1)
     cmap2 = plt.get_cmap(CMAP, N_CLASSES)
@@ -272,17 +274,18 @@ def main():
     gs = fig.add_gridspec(2, len(PERIODS), height_ratios=[1, 0.08], wspace=0.02, hspace=0.05)
     for c, period in enumerate(PERIODS):
         ax = fig.add_subplot(gs[0, c])
-        mrp = mr_by_period[period]
+        mrp = mrf_by_period[period]                       # 대구 자치구 세분화
         mrp.plot(ax=ax, column="val", cmap=cmap2, norm=norm2, edgecolor="#2c2c2c",
-                 linewidth=1.0, legend=False, missing_kwds={"color": "#eeeeee"})
-        # 대구광역시 진한 테두리
-        mrp[mrp["SIGUNGU_CD"] == "DAEGU"].boundary.plot(ax=ax, color="#111111",
-                                                        linewidth=3.0, zorder=4)
+                 linewidth=0.9, legend=False, missing_kwds={"color": "#eeeeee"})
+        # 대구광역시 외곽 진한 테두리(자치구 경계 위에 전체 윤곽)
+        gpd.GeoSeries([daegu_geom], crs=mrp.crs).boundary.plot(ax=ax, color="#111111",
+                                                               linewidth=3.0, zorder=4)
         for _, r in mrp.iterrows():
             cc = r.geometry.representative_point()
+            is_daegu = r["SIGUNGU_CD"].startswith("22")
             ax.annotate(r["SIGUNGU_NM"], xy=(cc.x, cc.y), ha="center", va="center",
-                        fontsize=15, fontweight="bold", color="#1a1a1a",
-                        path_effects=[pe.withStroke(linewidth=3, foreground="white")])
+                        fontsize=(9 if is_daegu else 15), fontweight="bold", color="#1a1a1a",
+                        path_effects=[pe.withStroke(linewidth=2.6, foreground="white")])
         ax.set_title(SUBT[period], fontsize=18, fontweight="bold", pad=4)
         ax.set_axis_off()
     cax = fig.add_subplot(gs[1, :]); cax.set_axis_off()
