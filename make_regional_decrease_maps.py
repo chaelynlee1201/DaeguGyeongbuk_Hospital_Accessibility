@@ -270,10 +270,10 @@ def main():
     cmap2 = plt.get_cmap(CMAP, N_CLASSES)
     norm2 = matplotlib.colors.BoundaryNorm(bounds2, cmap2.N)
 
-    fig = plt.figure(figsize=(16, 9), facecolor="white")
-    gs = fig.add_gridspec(2, len(PERIODS), height_ratios=[1, 0.08], wspace=0.02, hspace=0.05)
+    fig = plt.figure(figsize=(16, 8), facecolor="white")
+    gs = fig.add_gridspec(2, len(PERIODS), height_ratios=[1, 0.06], wspace=0.02, hspace=0.0)
     for c, period in enumerate(PERIODS):
-        ax = fig.add_subplot(gs[0, c])
+        ax = fig.add_subplot(gs[0, c]); ax.set_anchor("S")   # 지도를 셀 하단에 붙여 범례와 간격 축소
         mrp = mrf_by_period[period]                       # 대구 자치구 세분화
         mrp.plot(ax=ax, column="val", cmap=cmap2, norm=norm2, edgecolor="#2c2c2c",
                  linewidth=0.9, legend=False, missing_kwds={"color": "#eeeeee"})
@@ -288,13 +288,13 @@ def main():
                         path_effects=[pe.withStroke(linewidth=2.6, foreground="white")])
         ax.set_title(SUBT[period], fontsize=18, fontweight="bold", pad=4)
         ax.set_axis_off()
-    cax = fig.add_subplot(gs[1, :]); cax.set_axis_off()
+    cax = fig.add_subplot(gs[1, :]); cax.set_axis_off(); cax.set_anchor("N")
     sm = matplotlib.cm.ScalarMappable(norm=norm2, cmap=cmap2); sm.set_array([])
-    cb = fig.colorbar(sm, ax=cax, orientation="horizontal", fraction=0.6, aspect=40, pad=0.02)
+    cb = fig.colorbar(sm, ax=cax, orientation="horizontal", fraction=0.9, aspect=40, pad=0.0)
     cb.set_label("상대 감소율 중앙값 (%)", fontsize=15)
     cb.set_ticks(bounds2); cb.set_ticklabels([f"{b:.0f}" for b in bounds2])
     cb.ax.tick_params(labelsize=13)
-    fig.subplots_adjust(top=0.95, bottom=0.03, left=0.01, right=0.99)
+    fig.subplots_adjust(top=0.95, bottom=0.04, left=0.01, right=0.99)
     outD = f"{OUT_DIR}/regional_decrease_combined.png"
     plt.savefig(outD, dpi=200, facecolor="white", bbox_inches="tight", pad_inches=0.02); plt.close(fig)
     print("저장:", outD)
