@@ -260,32 +260,37 @@ def main():
     plot_percentile_grid_sharedlegend(cmap_eq, norm_eq,
                          f"{OUT_DIR}/g2sfca_ts_grid_percentile_maps_sharedlegend.png", extend="max")
 
-    # ── (2) 시간대별 상대 감소율(%) 비교 지도 2장 (공통 스케일 0~100%) ──
-    fig, axes = plt.subplots(1, len(PERIODS), figsize=(18, 8), facecolor="white")
-    fig.suptitle("접근성 상대 감소율: 상위 5%(P05) 대비 하위 5%(P95)", fontsize=24, fontweight="bold", y=0.985)
+    # ── (2) 시간대별 상대 감소율(%) 가로 합본 + 하단 가로 범례 (combined 스타일) ──
+    SUBT = {"0900": "09:00 기준", "1200": "12:00 기준"}
     bounds = [0, 20, 40, 60, 80, 100]
     cmap = plt.get_cmap("OrRd")
     norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
-    for ax, period in zip(np.atleast_1d(axes), PERIODS):
+    fig = plt.figure(figsize=(16, 8), facecolor="white")
+    gs = fig.add_gridspec(2, len(PERIODS), height_ratios=[1, 0.06], wspace=0.02, hspace=0.0)
+    for c, period in enumerate(PERIODS):
+        ax = fig.add_subplot(gs[0, c]); ax.set_anchor("S")   # 지도를 셀 하단에 붙여 범례와 간격 축소
         g = grids[period]
         if len(excluded):
             excluded.plot(ax=ax, color=EXCLUDED_COLOR, edgecolor="none", zorder=0)
-        # 상위5%(P05)=0 등으로 dec_pct가 NaN인 격자: 회색(missing)으로 표시
         g.plot(ax=ax, column="dec_pct", cmap=cmap, norm=norm, legend=False,
                edgecolor="none", zorder=1, missing_kwds={"color": EXCLUDED_COLOR})
         target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.0, zorder=2)
-        ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
-                                 label="인구 0 또는 상위5%(P05)=0 (산정 제외)")],
-                  loc="lower left", fontsize=9, frameon=True)
-        ax.set_title(f"{PERIODS[period]}", fontsize=16, fontweight="bold", pad=2)
+        if c == 0:
+            ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
+                                     label="인구 0 또는 상위5%(P05)=0 (산정 제외)")],
+                      loc="lower left", fontsize=10, frameon=True)
+        ax.set_title(SUBT[period], fontsize=18, fontweight="bold", pad=4)
         ax.set_axis_off()
-        ax.set_anchor("N")      # 지도를 셀 상단에 붙여 제목-지도 간격 최소화
-        sm = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap); sm.set_array([])
-        cb = fig.colorbar(sm, ax=ax, shrink=0.55)
-        cb.ax.set_xlabel("상대 감소율 (%)", fontsize=10, labelpad=6)
-    fig.subplots_adjust(top=0.96, bottom=0.01, wspace=0.02)
+    # 하단 가로 공통 범례
+    cax = fig.add_subplot(gs[1, :]); cax.set_axis_off(); cax.set_anchor("N")
+    sm = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap); sm.set_array([])
+    cb = fig.colorbar(sm, ax=cax, orientation="horizontal", fraction=0.9, aspect=40, pad=0.0)
+    cb.set_label("상대 감소율 (%)", fontsize=15)
+    cb.set_ticks(bounds); cb.set_ticklabels([f"{b:.0f}" for b in bounds])
+    cb.ax.tick_params(labelsize=13)
+    fig.subplots_adjust(top=0.95, bottom=0.04, left=0.01, right=0.99)
     out2 = f"{OUT_DIR}/g2sfca_ts_decrease_maps.png"
-    plt.savefig(out2, dpi=160, facecolor="white", bbox_inches="tight"); plt.close(fig)
+    plt.savefig(out2, dpi=160, facecolor="white", bbox_inches="tight", pad_inches=0.02); plt.close(fig)
     print("저장:", out2)
 
     # (지니계수 출력은 일단 제외 — gini/gini_ci/gini_diff_ci 함수는 보존, 필요시 재활성화)
