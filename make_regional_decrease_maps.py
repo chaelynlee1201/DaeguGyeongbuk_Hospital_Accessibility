@@ -45,6 +45,14 @@ CMAP = "OrRd"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 
+def label_point(geom):
+    """라벨 위치: 멀티폴리곤이면 '가장 큰 조각'의 대표점(엉뚱한 작은 섬 방지)."""
+    g = geom
+    if g.geom_type == "MultiPolygon":
+        g = max(g.geoms, key=lambda p: p.area)
+    return g.representative_point()
+
+
 def set_korean_font():
     from matplotlib import font_manager as fm
     for name in ["NanumGothic", "Noto Sans CJK KR", "Noto Sans KR", "Malgun Gothic",
@@ -89,7 +97,7 @@ def draw_main(ax, mr, cmap, norm, label_fs, show_box=True, box_bounds=None):
     mr.plot(ax=ax, column="val", cmap=cmap, norm=norm, edgecolor="#2c2c2c",
             linewidth=1.2, legend=False, missing_kwds={"color": "#eeeeee"})
     for _, r in mr.iterrows():
-        c = r.geometry.representative_point()
+        c = label_point(r.geometry)
         lab = r["SIGUNGU_NM"] + (f"\n{r['val']:.0f}%" if pd.notna(r["val"]) else "")
         ax.annotate(lab, xy=(c.x, c.y), ha="center", va="center", fontsize=label_fs,
                     fontweight="bold", color="#1a1a1a",
@@ -106,7 +114,7 @@ def draw_daegu(ax, dd, cmap, norm, label_fs, red_border=True):
     dd.plot(ax=ax, column="val", cmap=cmap, norm=norm, edgecolor="#2c2c2c",
             linewidth=0.9, legend=False, missing_kwds={"color": "#eeeeee"})
     for _, r in dd.iterrows():
-        c = r.geometry.representative_point()
+        c = label_point(r.geometry)
         lab = r["SIGUNGU_NM"].replace("군위군", "군위").replace("달성군", "달성") \
               + (f"\n{r['val']:.0f}%" if pd.notna(r["val"]) else "")
         ax.annotate(lab, xy=(c.x, c.y), ha="center", va="center", fontsize=label_fs,
@@ -206,7 +214,7 @@ def main():
         mrf.plot(ax=ax, column="val", cmap=cmap, norm=norm, edgecolor="#2c2c2c",
                  linewidth=1.0, legend=False, missing_kwds={"color": "#eeeeee"})
         for _, r in mrf.iterrows():
-            c = r.geometry.representative_point()
+            c = label_point(r.geometry)
             is_daegu = r["SIGUNGU_CD"].startswith("22")
             fs = 11 if is_daegu else 18
             lab = r["SIGUNGU_NM"] + (f"\n{r['val']:.0f}%" if pd.notna(r["val"]) else "")
@@ -281,7 +289,7 @@ def main():
         gpd.GeoSeries([daegu_geom], crs=mrp.crs).boundary.plot(ax=ax, color="#111111",
                                                                linewidth=3.0, zorder=4)
         for _, r in mrp.iterrows():
-            cc = r.geometry.representative_point()
+            cc = label_point(r.geometry)
             is_daegu = r["SIGUNGU_CD"].startswith("22")
             ax.annotate(r["SIGUNGU_NM"], xy=(cc.x, cc.y), ha="center", va="center",
                         fontsize=(9 if is_daegu else 15), fontweight="bold", color="#1a1a1a",
