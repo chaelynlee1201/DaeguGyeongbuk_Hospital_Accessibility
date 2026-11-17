@@ -140,12 +140,14 @@ def main():
     # 세분화 버전: 경북 8개 시·군 + 대구 자치구 9개 (대구 통합 안 함)
     fine_regions = pd.concat([gb, daegu_districts], ignore_index=True)
 
+    mr_by_period = {}   # 가로 합본 지도용: period → mr(대구 통합)
     for period in PERIODS:
         med, df = regional_stat(period, assign)
         daegu_val = df[df["SIGUNGU_CD"].isin(DAEGU_CODES)]["dec_pct"].median()  # 대구 통합=중앙값
 
         mr = main_regions.copy()
         mr["val"] = mr["SIGUNGU_CD"].map(lambda c: daegu_val if c == "DAEGU" else med.get(c, np.nan))
+        mr_by_period[period] = mr
         dd = daegu_districts.copy()
         dd["val"] = dd["SIGUNGU_CD"].map(lambda c: med.get(c, np.nan))
         mrf = fine_regions.copy()                            # 대구 자치구까지 세분화
@@ -257,6 +259,42 @@ def main():
             nm = "대구-" + name_map.get(code, code) if str(code).startswith("22") else name_map.get(code, code)
             print(f"    {nm:<10} n={len(v):>4}  중앙값={v.median():5.0f}%  "
                   f"100%격자={100*(v>=99.999).mean():4.0f}%  평균={v.mean():5.0f}%")
+
+    # ── (D) 09시+12시 가로 합본 + 하단 가로 범례 (대구 진한 테두리, 라벨 % 제거) ──
+    SUBT = {"0900": "09:00 기준", "1200": "12:00 기준"}
+    allv2 = np.concatenate([mr_by_period[p]["val"].dropna().values for p in PERIODS])
+    vmin2, vmax2 = float(np.nanmin(allv2)), float(np.nanmax(allv2))
+    bounds2 = np.linspace(vmin2, vmax2, N_CLASSES + 1)
+    cmap2 = plt.get_cmap(CMAP, N_CLASSES)
+    norm2 = matplotlib.colors.BoundaryNorm(bounds2, cmap2.N)
+
+    fig = plt.figure(figsize=(16, 9), facecolor="white")
+    gs = fig.add_gridspec(2, len(PERIODS), height_ratios=[1, 0.08], wspace=0.02, hspace=0.05)
+    for c, period in enumerate(PERIODS):
+        ax = fig.add_subplot(gs[0, c])
+        mrp = mr_by_period[period]
+        mrp.plot(ax=ax, column="val", cmap=cmap2, norm=norm2, edgecolor="#2c2c2c",
+                 linewidth=1.0, legend=False, missing_kwds={"color": "#eeeeee"})
+        # 대구광역시 진한 테두리
+        mrp[mrp["SIGUNGU_CD"] == "DAEGU"].boundary.plot(ax=ax, color="#111111",
+                                                        linewidth=3.0, zorder=4)
+        for _, r in mrp.iterrows():
+            cc = r.geometry.representative_point()
+            ax.annotate(r["SIGUNGU_NM"], xy=(cc.x, cc.y), ha="center", va="center",
+                        fontsize=15, fontweight="bold", color="#1a1a1a",
+                        path_effects=[pe.withStroke(linewidth=3, foreground="white")])
+        ax.set_title(SUBT[period], fontsize=18, fontweight="bold", pad=4)
+        ax.set_axis_off()
+    cax = fig.add_subplot(gs[1, :]); cax.set_axis_off()
+    sm = matplotlib.cm.ScalarMappable(norm=norm2, cmap=cmap2); sm.set_array([])
+    cb = fig.colorbar(sm, ax=cax, orientation="horizontal", fraction=0.6, aspect=40, pad=0.02)
+    cb.set_label("상대 감소율 중앙값 (%)", fontsize=15)
+    cb.set_ticks(bounds2); cb.set_ticklabels([f"{b:.0f}" for b in bounds2])
+    cb.ax.tick_params(labelsize=13)
+    fig.subplots_adjust(top=0.95, bottom=0.03, left=0.01, right=0.99)
+    outD = f"{OUT_DIR}/regional_decrease_combined.png"
+    plt.savefig(outD, dpi=200, facecolor="white", bbox_inches="tight", pad_inches=0.02); plt.close(fig)
+    print("저장:", outD)
 
 
 if __name__ == "__main__":
