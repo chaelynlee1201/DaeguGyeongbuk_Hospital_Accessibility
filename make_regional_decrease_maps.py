@@ -294,7 +294,7 @@ def main():
             if r["SIGUNGU_CD"] == "22520":      # 군위군: 라벨을 남서쪽으로 이동
                 lx -= 4000; ly -= 4000
             elif r["SIGUNGU_CD"] == "37560":    # 청도군: 라벨을 남서쪽으로 이동
-                lx -= 3000; ly -= 3000
+                lx -= 4000; ly -= 4000
             is_daegu = r["SIGUNGU_CD"].startswith("22")
             ax.annotate(r["SIGUNGU_NM"], xy=(lx, ly), ha="center", va="center",
                         fontsize=(9 if is_daegu else 15), fontweight="bold", color="#1a1a1a",
