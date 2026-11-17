@@ -290,8 +290,11 @@ def main():
                                                                linewidth=3.0, zorder=4)
         for _, r in mrp.iterrows():
             cc = label_point(r.geometry)
+            lx, ly = cc.x, cc.y
+            if r["SIGUNGU_CD"] == "22520":      # 군위군: 라벨을 남서쪽으로 이동
+                lx -= 6000; ly -= 6000
             is_daegu = r["SIGUNGU_CD"].startswith("22")
-            ax.annotate(r["SIGUNGU_NM"], xy=(cc.x, cc.y), ha="center", va="center",
+            ax.annotate(r["SIGUNGU_NM"], xy=(lx, ly), ha="center", va="center",
                         fontsize=(9 if is_daegu else 15), fontweight="bold", color="#1a1a1a",
                         path_effects=[pe.withStroke(linewidth=2.6, foreground="white")])
         ax.set_title(SUBT[period], fontsize=18, fontweight="bold", pad=4)
