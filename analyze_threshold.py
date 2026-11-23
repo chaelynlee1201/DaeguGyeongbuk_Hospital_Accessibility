@@ -4,7 +4,8 @@
 - 대표일 2026-08-11(화) 09:00 기준, 격자(origin)→시설(destination) 멀티모달 통행시간.
 - 세부 파라미터는 실제 분석과 동일(도보 4.5km/h, 총 도보 30분, 환승 5회, window 2시간).
 - max_time만 300분(5시간)으로 넉넉히 → 60분 너머 분포까지 관찰.
-- 격자별로 도달 가능한 시설 통행시간을 오름차순 정렬해 1번째·3번째 값을 추출.
+- 격자별로 도달 가능한 시설 통행시간을 오름차순 정렬해, 시설 1개/3개를 포함하는
+  최소 통행시간(= 1번째/3번째로 가까운 시설까지의 시간)을 추출.
 - 히스토그램 2장(1번째/3번째) + 누적도달률 보조선 + 도달불가 격자 수 보고.
 
 실행(서버):
@@ -107,8 +108,8 @@ def main():
     for col, nth in [("t_nearest1", 1), ("t_nearest3", 3)]:
         vals = out[col].dropna().values
         unreachable = int(out[col].isna().sum())
-        print(f"\n[{nth}번째 시설까지] 도달가능 {len(vals)}/{n_grid} "
-              f"| 도달불가 {unreachable} ({100*unreachable/n_grid:.1f}%)")
+        print(f"\n[시설 {nth}개 포함 최소시간] 도달가능 {len(vals)}/{n_grid} "
+              f"| {nth}개 미만 도달불가 {unreachable} ({100*unreachable/n_grid:.1f}%)")
         if len(vals):
             for p in [25, 50, 75, 90, 95]:
                 print(f"    {p}분위: {np.percentile(vals, p):.0f}분")
@@ -123,7 +124,7 @@ def main():
         ax.hist(vals, bins=bins, color="#4a7fb5", edgecolor="white", alpha=0.85)
         ax.set_xlabel("통행시간 (분)", fontsize=12)
         ax.set_ylabel("격자 수", fontsize=12)
-        ax.set_title(f"{nth}번째 의료시설까지의 통행시간 분포 — {DATE} {HOUR:02d}:00",
+        ax.set_title(f"의료시설 {nth}개 포함 최소 통행시간 분포 — {DATE} {HOUR:02d}:00",
                      fontsize=14, fontweight="bold")
         for thr in (30, 60):
             ax.axvline(thr, color="#c0392b", lw=1.5, ls="--")
