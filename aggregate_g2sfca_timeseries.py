@@ -32,6 +32,7 @@ PERDATE_DIR = f"{OUT_DIR}/perdate"
 SIGUNGU_SHP = "data/BND_SIGUNGU_PG/BND_SIGUNGU_PG.shp"
 GRID_SHP = "data/grid_1km_population_daegugyeongbuk/grid_1km_population_daegugyeongbuk.shp"
 EXCLUDED_COLOR = "#d9d9d9"  # 인구 0(분석 제외) 격자 표시색(회색)
+ZERO_COLOR = "#d7301f"      # 접근성=0 격자 표시색(빨강, 급간과 별도 구분)
 
 PERIODS = {"0900": "09:00 출발", "1200": "12:00 출발"}
 PCTLS = [5, 50, 95]
@@ -197,10 +198,15 @@ def main():
                     excluded.plot(ax=ax, color=EXCLUDED_COLOR, edgecolor="none", zorder=0)
                 g.plot(ax=ax, column=f"p{q:02d}", cmap=cmap_p, norm=norm_p,
                        legend=False, edgecolor="none", zorder=1)
+                # 접근성=0 격자는 급간 색이 아닌 별도 색(빨강)으로 구분
+                z = g[g[f"p{q:02d}"] == 0]
+                if len(z):
+                    z.plot(ax=ax, color=ZERO_COLOR, edgecolor="none", zorder=1.5)
                 target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.0, zorder=2)
-                ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
-                                         label="인구 0 (분석 제외)")],
-                          loc="lower left", fontsize=8, frameon=True)
+                if r == 0 and c == 0:
+                    ax.legend(handles=[Patch(facecolor=ZERO_COLOR, edgecolor="none", label="접근성 0"),
+                                       Patch(facecolor=EXCLUDED_COLOR, edgecolor="none", label="인구 0 (분석 제외)")],
+                              loc="lower left", fontsize=9, frameon=True)
                 name, pcode = DISPLAY[q]
                 ax.set_title(f"{PERIODS[period]} · {name} ({pcode})",
                              fontsize=15, fontweight="bold", pad=1)
@@ -230,10 +236,13 @@ def main():
                     excluded.plot(ax=ax, color=EXCLUDED_COLOR, edgecolor="none", zorder=0)
                 g.plot(ax=ax, column=f"p{q:02d}", cmap=cmap_p, norm=norm_p,
                        legend=False, edgecolor="none", zorder=1)
+                z = g[g[f"p{q:02d}"] == 0]
+                if len(z):
+                    z.plot(ax=ax, color=ZERO_COLOR, edgecolor="none", zorder=1.5)
                 target.boundary.plot(ax=ax, color="#2c2c2c", linewidth=1.0, zorder=2)
                 if r == 0 and c == 0:
-                    ax.legend(handles=[Patch(facecolor=EXCLUDED_COLOR, edgecolor="none",
-                                             label="인구 0 (분석 제외)")],
+                    ax.legend(handles=[Patch(facecolor=ZERO_COLOR, edgecolor="none", label="접근성 0"),
+                                       Patch(facecolor=EXCLUDED_COLOR, edgecolor="none", label="인구 0 (분석 제외)")],
                               loc="lower left", fontsize=11, frameon=True)
                 name, pcode = DISPLAY[q]
                 ax.set_title(f"{PERIODS[period]} · {name} ({pcode})",
