@@ -324,6 +324,38 @@ def main():
         print(f"  {PERIODS[period]}: 중앙값 {d.median():.1f}% · 평균 {d.mean():.1f}% "
               f"· 표준편차 {d.std():.1f}% (n={len(d):,})")
 
+    # ── 지니계수(로렌츠 곡선) 선그래프: 시간대별 2장, P05·P95 × 인구가중/격자가중 ──
+    #   선1=인구 기준(인구수 가중), 선2=격자 기준(격자 동등 가중). 1km 동일면적이라
+    #   인구밀도 가중은 인구 가중과 동일해지므로 '격자(면적) 기준'을 비교선으로 사용.
+    print("\n[지니계수] 접근성 공간 불평등 (로렌츠, 0 포함)")
+    for period in PERIODS:
+        g = grids[period]
+        fig, ax = plt.subplots(figsize=(6.5, 5.5), facecolor="white")
+        xpos = [0, 1]
+        xticklab = [f"상위 5%\n(P05)", f"하위 5%\n(P95)"]
+        gini_pop = [gini(g["p95"].values, g["TOT_POP"].values),   # P05=상위5%=계산상 95분위
+                    gini(g["p05"].values, g["TOT_POP"].values)]    # P95=하위5%=계산상 5분위
+        gini_grid = [gini(g["p95"].values), gini(g["p05"].values)]
+        ax.plot(xpos, gini_pop, "o-", lw=2.5, ms=9, color="#c0392b", label="인구 기준")
+        ax.plot(xpos, gini_grid, "s--", lw=2.5, ms=9, color="#2c6fbb", label="격자 기준")
+        for xv, yv in zip(xpos, gini_pop):
+            ax.annotate(f"{yv:.3f}", (xv, yv), textcoords="offset points", xytext=(0, 10),
+                        ha="center", fontsize=11, color="#c0392b", fontweight="bold")
+        for xv, yv in zip(xpos, gini_grid):
+            ax.annotate(f"{yv:.3f}", (xv, yv), textcoords="offset points", xytext=(0, -16),
+                        ha="center", fontsize=11, color="#2c6fbb", fontweight="bold")
+        ax.set_xticks(xpos); ax.set_xticklabels(xticklab, fontsize=12)
+        ax.set_xlim(-0.3, 1.3)
+        ax.set_ylabel("지니계수", fontsize=13)
+        ax.set_title(f"접근성 지니계수 — {PERIODS[period]}", fontsize=15, fontweight="bold")
+        ax.grid(axis="y", linestyle=":", alpha=0.6)
+        ax.legend(fontsize=12, loc="best")
+        plt.tight_layout()
+        out = f"{OUT_DIR}/g2sfca_ts_gini_{period}.png"
+        plt.savefig(out, dpi=180, facecolor="white", bbox_inches="tight"); plt.close(fig)
+        print(f"  저장: {out}  | 인구기준 P05={gini_pop[0]:.3f} P95={gini_pop[1]:.3f} "
+              f"| 격자기준 P05={gini_grid[0]:.3f} P95={gini_grid[1]:.3f}")
+
     # 요약
     for period in PERIODS:
         print(f"\n[{PERIODS[period]}] 격자 분위·감소율 요약 "
