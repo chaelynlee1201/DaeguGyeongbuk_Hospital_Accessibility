@@ -65,7 +65,11 @@ def main():
         ax2 = ax.twinx()
         ax2.plot(centers, cum, "o-", color="#e07b39", lw=2, ms=5, label="누적 커버율(%)")
         ax2.set_ylabel("누적 커버율 (%, 전체 격자 대비)", fontsize=12, color="#e07b39")
-        ax2.tick_params(axis="y", labelcolor="#e07b39"); ax2.set_ylim(0, 100)
+        ax2.tick_params(axis="y", labelcolor="#e07b39"); ax2.set_ylim(0, 105)
+        # 누적 곡선 위에 '구간 기울기(%p/구간)' 수치를 겹쳐 표시
+        for ce, m, c in zip(centers, marg, cum):
+            ax2.annotate(f"+{m:.1f}", (ce, c), textcoords="offset points", xytext=(0, 8),
+                         ha="center", fontsize=8, color="#b5560f", fontweight="bold")
 
         for thr in (30, 60, 90):
             ax.axvline(thr, color="#999", ls=":", lw=1)
