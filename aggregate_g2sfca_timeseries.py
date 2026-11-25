@@ -27,7 +27,9 @@ import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 from matplotlib.patches import Patch
 
-OUT_DIR = "data/g2sfca_timeseries"
+# 임계 통행시간 d0(분). compute와 동일하게 환경변수 D0_MIN로 선택(기본 60).
+D0_MIN = int(os.environ.get("D0_MIN", "60"))
+OUT_DIR = "data/g2sfca_timeseries" if D0_MIN == 60 else f"data/g2sfca_timeseries_{D0_MIN}min"
 PERDATE_DIR = f"{OUT_DIR}/perdate"
 SIGUNGU_SHP = "data/BND_SIGUNGU_PG/BND_SIGUNGU_PG.shp"
 GRID_SHP = "data/grid_1km_population_daegugyeongbuk/grid_1km_population_daegugyeongbuk.shp"

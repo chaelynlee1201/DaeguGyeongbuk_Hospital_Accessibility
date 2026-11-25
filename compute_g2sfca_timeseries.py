@@ -49,16 +49,19 @@ FAC_SHP = "data/medical_facilities_filtered/medical_facilities_filtered.shp"
 GRID_SHP = "data/grid_1km_population_daegugyeongbuk/grid_1km_population_daegugyeongbuk.shp"
 SIGUNGU_SHP = "data/BND_SIGUNGU_PG/BND_SIGUNGU_PG.shp"
 
-OUT_DIR = "data/g2sfca_timeseries"
+# 임계 통행시간 d0(분). 환경변수 D0_MIN으로 바꿀 수 있음(기본 60).
+#   예) D0_MIN=100 python compute_g2sfca_timeseries.py
+TRVL_TIME = int(os.environ.get("D0_MIN", "60"))
+# d0=60이면 기존 폴더(data/g2sfca_timeseries) 유지, 그 외는 별도 폴더로 분리
+OUT_DIR = "data/g2sfca_timeseries" if TRVL_TIME == 60 else f"data/g2sfca_timeseries_{TRVL_TIME}min"
 PERDATE_DIR = f"{OUT_DIR}/perdate"              # 아래에 시간대별 하위폴더(0900/1200)
-GTFS_CLEAN_DIR = f"{OUT_DIR}/gtfs_clean"  # 참조 무결성 정제한 GTFS 복사본 캐시
+GTFS_CLEAN_DIR = "data/g2sfca_timeseries/gtfs_clean"  # 정제 GTFS 캐시는 공용(재사용)
 
 # 두 출발 시간대(오전 첨두 09:00, 정오 12:00)를 각각 독립 계산한다.
 PERIODS = {"0900": 9, "1200": 12}       # 폴더명 → 출발 시각(시)
 
-TRVL_TIME = 60          # Gaussian 임계 통행시간 d0 (분)
 DEPART_WINDOW_H = 2     # departure_time_window (시간)
-MAX_TIME_MIN = 60       # 60분 초과(도달불가) 쌍은 반환되지 않음 → sparse
+MAX_TIME_MIN = TRVL_TIME  # d0 초과(도달불가) 쌍은 반환되지 않음 → sparse (임계와 동일)
 WALK_SPEED = 4.5
 MAX_WALK_MIN = 30       # 여정 내 총 도보시간 상한(접근+환승+이격 합산)
 MAX_RIDES = 5

@@ -32,8 +32,11 @@ from matplotlib.patches import Rectangle
 
 GRID_SHP = "data/grid_1km_population_daegugyeongbuk/grid_1km_population_daegugyeongbuk.shp"
 SIGUNGU_SHP = "data/BND_SIGUNGU_PG/BND_SIGUNGU_PG.shp"
-PCT_GPKG = "data/g2sfca_timeseries/g2sfca_ts_grid_percentiles_{period}.gpkg"
-OUT_DIR = "data/regional_maps"
+# 임계 d0(분): 환경변수 D0_MIN로 선택(기본 60). 60이면 기존 경로 유지.
+D0_MIN = int(os.environ.get("D0_MIN", "60"))
+_TS_DIR = "data/g2sfca_timeseries" if D0_MIN == 60 else f"data/g2sfca_timeseries_{D0_MIN}min"
+PCT_GPKG = f"{_TS_DIR}/g2sfca_ts_grid_percentiles_{{period}}.gpkg"
+OUT_DIR = "data/regional_maps" if D0_MIN == 60 else f"data/regional_maps_{D0_MIN}min"
 PERIODS = {"0900": "09:00 출발", "1200": "12:00 출발"}
 
 DAEGU_CODES = ["22010", "22020", "22030", "22040", "22050", "22060", "22070", "22510", "22520"]
